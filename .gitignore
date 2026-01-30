@@ -4,3 +4,16 @@
 /.env_prod
 /sessions/*
 /poetry.lock
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.Python
+*.so
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
