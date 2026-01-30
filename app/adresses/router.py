@@ -274,11 +274,13 @@ async def check_material_dependencies(adress_id: str) -> bool:
     # Пример проверки в других коллекциях
     from app.deals.dao import DealsDAO
 
-    # Проверяем, используется ли материал в продуктах
+    # Проверяем, используется ли адрес в сделках (доставка или отгрузка)
+    oid = ObjectId(adress_id)
     deals_using_adress = await DealsDAO.count(
-        {"shippingAddressId": ObjectId(adress_id),
-         "deliveryAddresslId": ObjectId(adress_id)
-         }
+        {"$or": [
+            {"shippingAddressId": oid},
+            {"deliveryAddressId": oid}
+        ]}
     )
 
     # Можно добавить другие проверки (заказы, документы и т.д.)

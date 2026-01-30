@@ -1,4 +1,5 @@
 import re
+from datetime import datetime, timezone
 from typing import Optional, Dict, List, Any, Union
 
 from bson import ObjectId
@@ -309,3 +310,28 @@ class MongoDAO:
         except Exception as e:
             logger.error(f"Error checking uniqueness: {str(e)}", exc_info=True)
             return False
+
+    @classmethod
+    async def soft_delete(
+            cls,
+            object_id: Union[str, ObjectId],
+            deleted_at_field: str = "deletedAt",
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Софт-удаление: помечает документ полем deletedAt (или указанным полем).
+        Возвращает обновлённый документ или None при ошибке.
+        """
+        try:
+            if isinstance(object_id, str):
+                object_id = ObjectId(object_id)
+            update_data = {deleted_at_field: datetime.now(timezone.utc)}
+            result = await cls.update_by_id(
+                object_id=object_id,
+                update_data=update_data,
+                upsert=False,
+                return_document=True,
+            )
+            return result
+        except Exception as e:
+            logger.error(f"Error soft-deleting document: {str(e)}", exc_info=True)
+            return None

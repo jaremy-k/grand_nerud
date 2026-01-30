@@ -15,6 +15,7 @@ from app.deals.router import router as router_deals
 from app.services.router import router as router_services
 from app.stages.router import router as router_stages
 from app.vehicles.router import router as router_vehicles
+from app.adresses.router import router as router_adresses
 
 
 @asynccontextmanager
@@ -41,13 +42,13 @@ app.add_middleware(
 templates = Jinja2Templates(directory="templates")
 
 app.include_router(router_users)
-app.include_router(router_users)
 app.include_router(router_materials)
 app.include_router(router_companies)
 app.include_router(router_deals)
 app.include_router(router_services)
 app.include_router(router_stages)
 app.include_router(router_vehicles)
+app.include_router(router_adresses)
 
 services = [
     {"_id": "1", "name": "продажа сырья"},

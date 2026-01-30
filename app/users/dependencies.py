@@ -4,7 +4,7 @@ from fastapi import Request, Depends
 from jose import jwt, JWTError
 
 from app.config import settings
-from app.exceptions import TokenAbsentException, IncorrectTokenFormatEcxeption, UserIsNotPresentException
+from app.exceptions import TokenAbsentException, IncorrectTokenFormatException, UserIsNotPresentException
 from app.logger import logger
 from app.users.dao import UsersDAO
 from app.users.shemas import SUsersGet
@@ -24,7 +24,7 @@ async def get_current_user(token: str = Depends(get_token)):
             token, settings.SECRET_KEY, settings.ALGORITHM
         )
     except JWTError:
-        raise IncorrectTokenFormatEcxeption
+        raise IncorrectTokenFormatException
     user_id: str = payload.get("sub")
     logger.info(f"user_id: {user_id}")
     if not user_id:

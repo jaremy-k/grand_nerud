@@ -1,3 +1,4 @@
+import re
 from typing import Optional
 
 import requests
@@ -62,23 +63,24 @@ async def add_company(data: SCompaniesAdd):
     """
     Добавление новой компании.
 
-    Проверяет уникальность инн компании перед добавлением.
+    Проверяет уникальность ИНН: если компания с таким ИНН уже есть,
+    возвращает её данные в том же формате, что и при добавлении (201).
     """
     try:
-        # Проверка уникальности без учёта регистра и с обрезкой пробелов
-        if data.inn:
+        # Проверка уникальности ИНН: если уже есть — возвращаем существующую компанию
+        if data.inn is not None:
             if not await CompaniesDAO.is_unique(
                     field_name="inn",
                     value=data.inn,
                     case_sensitive=False,
                     trim_spaces=True
             ):
-                raise HTTPException(
-                    status_code=409,
-                    detail="Компания с таким инн уже существует"
-                )
+                # ИНН уже есть — находим компанию и возвращаем как при добавлении
+                existing = await _find_company_by_inn(data.inn)
+                if existing:
+                    return existing
 
-        # Создание
+        # Создание новой компании
         company_data = data.model_dump(exclude_none=True)
         result = await CompaniesDAO.add(document=company_data)
 
@@ -93,11 +95,35 @@ async def add_company(data: SCompaniesAdd):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Ошибка при создании материала: {str(e)}", exc_info=True)
+        logger.error(f"Ошибка при создании компании: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Произошла ошибка при создании материала"
+            detail="Произошла ошибка при создании компании"
         )
+
+
+async def _find_company_by_inn(inn: int | str) -> SCompanies | None:
+    """Находит компанию по ИНН (учитывает хранение в БД как str или int)."""
+    value = str(inn).strip() if inn is not None else None
+    if value is None:
+        return None
+    # Поиск по строке (регистронезависимо, как в is_unique)
+    found = await CompaniesDAO.find_one_or_none(
+        filter_by={
+            "inn": {
+                "$regex": f"^{re.escape(value)}$",
+                "$options": "i"
+            }
+        }
+    )
+    if found:
+        return found
+    # На случай если в БД хранится число
+    try:
+        num = int(value)
+        return await CompaniesDAO.find_one_or_none(inn=num)
+    except (ValueError, TypeError):
+        return None
 
 
 @router.patch(

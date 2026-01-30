@@ -69,9 +69,7 @@ async def get_deals(
     return result
 
 
-@router.get("/admin/get",
-            response_model=list[SDealsWithRelations],
-            summary="Получить список сделок со связанными объектами")
+@router.get("/admin/get", summary="Получить список сделок со связанными объектами")
 async def get_deals_for_admins(data: SDeals = Depends()):
     # if not hasattr(user, 'admin') or user.admin == False:
     #     raise HTTPException(status_code=403, detail="Доступ закрыт")
@@ -131,7 +129,9 @@ async def get_deals_for_admins(data: SDeals = Depends()):
     ]
 
     result = await DealsDAO.aggregate(pipeline)
-    return result
+    # Сериализация ObjectId и datetime для JSON (как в get_deal_with_relations)
+    deal_list = [json.loads(json.dumps(doc, cls=CustomJSONEncoder, default=str)) for doc in result]
+    return JSONResponse(content=deal_list)
 
 
 @router.get("/{id}",

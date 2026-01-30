@@ -29,13 +29,14 @@ class TokenAbsentException(MainException):
     detail = "Токен отсутствует"
 
 
-class IncorrectTokenFormatEcxeption(MainException):
+class IncorrectTokenFormatException(MainException):
     status_code = status.HTTP_401_UNAUTHORIZED
     detail = "Неверный формат токена"
 
 
 class UserIsNotPresentException(MainException):
     status_code = status.HTTP_401_UNAUTHORIZED
+    detail = "Пользователь не найден"
 
 
 class NotUniqueEntity(MainException):

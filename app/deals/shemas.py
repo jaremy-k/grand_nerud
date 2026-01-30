@@ -74,7 +74,7 @@ class SDeals(BaseModel):
     methodReceiving: str | None = None  # способ получения (доставка, самовывоз)
     deliveryAddress: str | None = None  # адрес доставка (куда доставить товар)
 
-    deadline: datetime | None = None  # срок к которому надо завершить заказ
+    deliveredQuantity: List[dict] | None = None  # сколько единиц доставлено (JSON)
     notes: str | None = None
     OSSIG: bool | None = None  # это для утилизации
 
@@ -133,7 +133,7 @@ class SDealsAdd(BaseModel):
     methodReceiving: str | None = None  # способ получения (доставка, самовывоз)
     deliveryAddress: str | None = None  # адрес доставка (куда доставить товар)
 
-    deadline: datetime | None = None  # срок к которому надо завершить заказ
+    deliveredQuantity: List[dict] | None = None  # сколько единиц доставлено (JSON)
     notes: str | None = None
     OSSIG: bool | None = None  # это для утилизации
 
