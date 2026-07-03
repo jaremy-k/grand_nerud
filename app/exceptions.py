@@ -26,7 +26,7 @@ class TokenExpireException(MainException):
 
 class TokenAbsentException(MainException):
     status_code = status.HTTP_401_UNAUTHORIZED
-    detail = "Токен отсутствует"
+    detail = "Токен отсутствует. Передайте заголовок Authorization: Bearer <token>"
 
 
 class IncorrectTokenFormatException(MainException):
@@ -41,3 +41,8 @@ class UserIsNotPresentException(MainException):
 
 class NotUniqueEntity(MainException):
     status_code = status.HTTP_409_CONFLICT
+
+
+class ExternalServiceException(HTTPException):
+    def __init__(self, detail: str = "Ошибка внешнего сервиса"):
+        super().__init__(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)

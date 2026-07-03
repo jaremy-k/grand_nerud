@@ -1,17 +1,14 @@
-from datetime import timedelta
-
-from fastapi import APIRouter, Response, Depends
+from fastapi import APIRouter, Depends
 
 from app.exceptions import UserAlreadyExistsException, IncorrectEmailOrPasswordException
 from app.users.auth import get_password_hash, authenticate_user, create_access_token
 from app.users.dao import UsersDAO
 from app.users.dependencies import get_current_user, get_current_admin_user
-from app.users.models import Users
-from app.users.shemas import SUsersAuth, SUserAuth, SUsersGetResponse
+from app.users.shemas import SUsersAuth, SUsersGetResponse
 
 router = APIRouter(
     prefix="/auth",
-    tags=["Auth & Пользователи"]
+    tags=["Auth & Пользователи"],
 )
 
 
@@ -26,35 +23,21 @@ async def register_user(data: SUsersAuth):
 
 
 @router.post("/login")
-async def login_user(response: Response, user_data: SUsersAuth):
+async def login_user(user_data: SUsersAuth):
     user = await authenticate_user(user_data.email, user_data.password)
     if not user:
         raise IncorrectEmailOrPasswordException
     access_token = create_access_token({"sub": str(user.id)})
-    response.set_cookie(
-        key="tg_news_bot_access_token",
-        value=access_token,
-        httponly=True,  # Защита от XSS (обязательно)
-        secure=False,  # False для localhost (True для HTTPS в продакшене)
-        samesite="none",  # "none" не работает без secure=True
-        domain="None",  # Не указываем domain для localhost
-        max_age=30 * 24 * 60 * 60,  # 30 дней в секундах (int)
-        path="/",  # Доступна для всех путей
-    )
-    return {"access_token": access_token}
-
-
-@router.post("/logout")
-async def logout_user(response: Response):
-    response.delete_cookie("tg_news_bot_access_token")
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 @router.get("/me")
-async def read_users_me(current_user: Users = Depends(get_current_user)) -> SUsersGetResponse:
+async def read_users_me(current_user: SUsersGetResponse = Depends(get_current_user)) -> SUsersGetResponse:
     return current_user
 
 
 @router.get("/all")
-async def read_users_all(current_user=Depends(get_current_admin_user)) -> list[SUsersGetResponse]:
-    users = await UsersDAO.find_all()
-    return users
+async def read_users_all(
+        current_user: SUsersGet = Depends(get_current_admin_user),
+) -> list[SUsersGetResponse]:
+    return await UsersDAO.find_all()

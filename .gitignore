@@ -3,7 +3,6 @@
 /.env*
 /.env_prod
 /sessions/*
-/poetry.lock
 
 # Python cache
 __pycache__/

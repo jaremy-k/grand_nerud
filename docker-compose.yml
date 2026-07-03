@@ -1,8 +1,4 @@
 services:
-  redis:
-    image: redis:7
-    container_name: grand_nerud_redis
-
   grand_nerud:
     build:
       context: .
@@ -15,34 +11,8 @@ services:
     restart: on-failure:10
     volumes:
       - ../uploads:/grand_nerud/uploads/
-      - ./app/migrations/versions:/grand_nerud/app/migrations/versions
     depends_on:
-      - redis
       - mongo
-
-  celery:
-    build:
-      context: .
-    container_name: grand_nerud_celery
-    command: [ '/grand_nerud/docker/celery.sh', 'celery' ]
-    env_file:
-      - .env_prod
-    volumes:
-      - ../uploads:/grand_nerud/uploads/
-    depends_on:
-      - redis
-
-  flower:
-    build:
-      context: .
-    container_name: grand_nerud_flower
-    command: [ '/grand_nerud/docker/celery.sh', 'flower' ]
-    env_file:
-      - .env_prod
-    depends_on:
-      - redis
-    ports:
-      - "5557:5555"
 
   mongo:
     image: mongo

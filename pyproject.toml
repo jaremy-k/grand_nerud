@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "grand-nerud"
+version = "0.1.0"
+description = "CRM API для сделок с нерудными материалами"
+authors = []
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "0.115.12"
+uvicorn = "^0.34.2"
+gunicorn = "^23.0.0"
+pydantic = { version = "^2.11.4", extras = ["email"] }
+pydantic-settings = "^2.9.1"
+python-jose = "^3.4.0"
+passlib = { version = "^1.7.4", extras = ["bcrypt"] }
+python-json-logger = "^3.3.0"
+motor = "^3.7.1"
+httpx = "^0.28.1"
+aioboto3 = "^14.3.0"
+pytz = "^2025.2"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
