@@ -1,4 +1,5 @@
 from typing import Literal
+from urllib.parse import quote_plus
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -29,10 +30,11 @@ class Settings(BaseSettings):
 
     @property
     def MONGO_URL(self) -> str:
+        user = quote_plus(self.MONGO_INITDB_ROOT_USERNAME)
+        password = quote_plus(self.MONGO_INITDB_ROOT_PASSWORD)
         return (
-            f"mongodb://{self.MONGO_INITDB_ROOT_USERNAME}:"
-            f"{self.MONGO_INITDB_ROOT_PASSWORD}@{self.MONGO_HOST}:"
-            f"{self.MONGO_PORT}"
+            f"mongodb://{user}:{password}@{self.MONGO_HOST}:"
+            f"{self.MONGO_PORT}/?authSource=admin"
         )
 
     @property

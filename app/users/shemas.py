@@ -49,12 +49,22 @@ class SUsersGet(BaseModel):
 
 class SUsersUpdate(BaseModel):
     email: EmailStr | None = None
-    password: str | None = None
+    password: str | None = Field(None, min_length=6)
     name: str | None = None
     lastName: str | None = None
     fatherName: str | None = None
     profit: dict | None = None
     admin: bool | None = None
+
+
+class SUsersCreate(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=6)
+    name: str | None = None
+    lastName: str | None = None
+    fatherName: str | None = None
+    profit: dict | None = None
+    admin: bool | None = False
 
 
 class SUsersGetResponse(BaseModel):

@@ -2,10 +2,10 @@ from bson import ObjectId
 
 from app.core.base_entity_service import BaseEntityService
 from app.deals.repository import deals_repository
-from app.exceptions import ConflictError, ForbiddenError, InternalError, NotFoundError
+from app.exceptions import ConflictError, ForbiddenError, InternalError, NotFoundError, UserAlreadyExistsError
 from app.users.auth import get_password_hash
 from app.users.repository import users_repository
-from app.users.shemas import SUsersUpdate
+from app.users.shemas import SUsersCreate, SUsersUpdate
 
 
 class UsersService(BaseEntityService):
@@ -19,6 +19,28 @@ class UsersService(BaseEntityService):
         if not include_deleted:
             query["deletedAt"] = None
         return await cls.repository.find_many(**query)
+
+    @classmethod
+    async def create(cls, data: SUsersCreate) -> dict:
+        existing = await cls.repository.find_one(email=data.email)
+        if existing:
+            raise UserAlreadyExistsError()
+
+        document = {
+            "email": data.email,
+            "hashed_password": get_password_hash(data.password),
+            "admin": data.admin or False,
+            "name": data.name,
+            "lastName": data.lastName,
+            "fatherName": data.fatherName,
+            "profit": data.profit,
+        }
+        document = {key: value for key, value in document.items() if value is not None}
+
+        result = await cls.repository.create(document)
+        if not result:
+            raise InternalError("Не удалось создать пользователя")
+        return result
 
     @classmethod
     async def update(cls, user_id: str, data: SUsersUpdate, is_admin: bool = False) -> dict:

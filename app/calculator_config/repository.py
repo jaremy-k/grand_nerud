@@ -1,8 +1,8 @@
 from typing import Any
 
-from app.calculator_config.repository import CONFIG_ID
 from app.database import database_mongo
 
+CONFIG_ID = "calculator"
 _collection = database_mongo["calculator_config"]
 
 

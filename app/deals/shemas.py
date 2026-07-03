@@ -21,9 +21,10 @@ class SDealDeliveredQuantity(BaseModel):
 
 class _ObjectIdConverterMixin:
     @field_validator(
-        "serviceId", "customerId", "providerId", "stageId", "materialId", "userId",
+        "serviceId", "customerId", "providerId", "stageId", "materialId",
         "shippingAddressId", "deliveryAddressId",
         mode="before",
+        check_fields=False,
     )
     @classmethod
     def convert_str_to_objectid(cls, v: Optional[str]) -> Optional[ObjectId]:
