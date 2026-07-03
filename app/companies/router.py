@@ -5,14 +5,16 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from app.companies.service import CompaniesService
 from app.companies.shemas import SCompanies, SCompaniesAdd
 from app.logger import logger
+from app.users.dependencies import get_current_user
 
 router = APIRouter(
     prefix="/companies",
     tags=["Компании партнеры"],
+    dependencies=[Depends(get_current_user)],
 )
 
 
-@router.get("/get_company_info/{inn}", summary="Получить компанию по ИНН или ОГРН")
+@router.get("/fns/{inn}", summary="Получить компанию по ИНН из ФНС")
 async def get_company_info(inn: int):
     return await CompaniesService.fetch_from_fns(inn)
 

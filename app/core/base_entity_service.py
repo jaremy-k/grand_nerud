@@ -1,21 +1,21 @@
 from typing import Awaitable, Callable, Optional
 
-from bson import ObjectId
-from fastapi import HTTPException, status
-
-from app.dao.base import MongoDAO
+from app.core.object_id import parse_object_id
+from app.exceptions import ConflictError, InternalError, NotFoundError
+from app.repositories.protocols import EntityRepositoryProtocol
 
 
 class BaseEntityService:
-    dao: type[MongoDAO]
+    repository: EntityRepositoryProtocol
     not_found_detail: str = "Объект не найден"
     conflict_detail: str = "Невозможно удалить — имеются связанные объекты"
 
     @classmethod
     async def get_by_id(cls, entity_id: str) -> dict:
-        result = await cls.dao.find_one_or_none(_id=ObjectId(entity_id))
+        oid = parse_object_id(entity_id)
+        result = await cls.repository.find_one(_id=oid)
         if not result:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=cls.not_found_detail)
+            raise NotFoundError(cls.not_found_detail)
         return result
 
     @classmethod
@@ -25,17 +25,15 @@ class BaseEntityService:
             check_dependencies: bool = True,
             dependency_checker: Optional[Callable[[str], Awaitable[bool]]] = None,
     ) -> dict:
-        entity = await cls.dao.find_one_or_none(_id=ObjectId(entity_id))
+        oid = parse_object_id(entity_id)
+        entity = await cls.repository.find_one(_id=oid)
         if not entity:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=cls.not_found_detail)
+            raise NotFoundError(cls.not_found_detail)
 
         if check_dependencies and dependency_checker and await dependency_checker(entity_id):
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=cls.conflict_detail)
+            raise ConflictError(cls.conflict_detail)
 
-        result = await cls.dao.soft_delete(entity_id)
+        result = await cls.repository.soft_delete(entity_id)
         if not result:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Не удалось удалить объект",
-            )
+            raise InternalError("Не удалось удалить объект")
         return result

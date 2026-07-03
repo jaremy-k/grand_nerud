@@ -4,7 +4,7 @@ from pydantic import EmailStr
 from jose import jwt
 
 from app.config import settings
-from app.users.dao import UsersDAO
+from app.users.repository import users_repository
 from app.users.shemas import SUsersGet
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -29,7 +29,7 @@ def create_access_token(data: dict) -> str:
 
 
 async def authenticate_user(email: EmailStr, password: str):
-    user_dict = await UsersDAO.find_one_or_none(email=email)
+    user_dict = await users_repository.find_one(email=email)
     if not user_dict or user_dict.get("deletedAt"):
         return None
     user = SUsersGet.model_validate(user_dict)

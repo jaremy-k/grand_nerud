@@ -10,7 +10,7 @@ async def init_integrations() -> None:
     global _fns_client, _s3_client
     await init_http_client()
     _fns_client = FnsClient(get_http_client())
-    _s3_client = S3StorageClient()
+    _s3_client = None
 
 
 async def close_integrations() -> None:
@@ -27,6 +27,11 @@ def get_fns_client() -> FnsClient:
 
 
 def get_s3_client() -> S3StorageClient:
+    from app.config import settings
+
+    global _s3_client
+    if not settings.is_s3_enabled:
+        raise RuntimeError("S3 is not configured")
     if _s3_client is None:
-        raise RuntimeError("S3 client is not initialized")
+        _s3_client = S3StorageClient()
     return _s3_client

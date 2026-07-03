@@ -13,8 +13,7 @@ class SCompanies(BaseModel):
     inn: str | int | None = None
     contacts: List[dict] | None = None
     type: str | None = None
-    deleted_at: datetime | None = None
-    is_deleted: bool | None = None
+    deletedAt: datetime | None = None
 
     @field_validator("id", mode="before")
     def convert_objectid(cls, v):
@@ -33,8 +32,6 @@ class SCompaniesAdd(BaseModel):
     inn: int | str | None = None
     contacts: List[dict] | None = None
     type: str | None = None
-    deleted_at: datetime | None = None
-    is_deleted: bool | None = None
 
     model_config = SettingsConfigDict(
         json_encoders={ObjectId: str},

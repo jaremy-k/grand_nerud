@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from bson import ObjectId
@@ -11,6 +12,7 @@ class SAdresses(BaseModel):
     cityId: str | None = None
     adressDetail: dict | None = None
     typeAdress: str | None = None
+    deletedAt: datetime | None = None
 
     @field_validator("id", mode="before")
     def convert_objectid(cls, v):

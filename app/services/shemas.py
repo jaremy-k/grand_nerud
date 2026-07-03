@@ -7,8 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 class SServices(BaseModel):
     id: str | None = Field(None, alias="_id")
     name: str | None = None
-    deleted_at: datetime | None = None
-    is_deleted: bool | None = None
+    deletedAt: datetime | None = None
 
     @field_validator("id", mode="before")
     def convert_objectid(cls, v):

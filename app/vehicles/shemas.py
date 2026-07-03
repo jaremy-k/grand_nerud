@@ -13,8 +13,7 @@ class SVehicles(BaseModel):
     model: str | None = None
     year: int | None = None
     color: str | None = None
-    deleted_at: datetime | None = None
-    is_deleted: bool | None = None
+    deletedAt: datetime | None = None
 
     @field_validator("id", mode="before")
     def convert_objectid(cls, v):
