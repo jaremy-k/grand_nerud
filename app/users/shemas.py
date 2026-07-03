@@ -47,6 +47,16 @@ class SUsersGet(BaseModel):
         populate_by_name = True
 
 
+class SUsersUpdate(BaseModel):
+    email: EmailStr | None = None
+    password: str | None = None
+    name: str | None = None
+    lastName: str | None = None
+    fatherName: str | None = None
+    profit: dict | None = None
+    admin: bool | None = None
+
+
 class SUsersGetResponse(BaseModel):
     id: str | None = Field(None, alias="_id")
     name: str | None = None

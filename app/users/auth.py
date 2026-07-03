@@ -30,6 +30,8 @@ def create_access_token(data: dict) -> str:
 
 async def authenticate_user(email: EmailStr, password: str):
     user_dict = await UsersDAO.find_one_or_none(email=email)
+    if not user_dict or user_dict.get("deletedAt"):
+        return None
     user = SUsersGet.model_validate(user_dict)
     if not (user and verify_password(password, user.hashed_password)):
         return None

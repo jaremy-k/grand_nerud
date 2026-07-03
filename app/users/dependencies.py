@@ -28,7 +28,7 @@ async def get_current_user(token: str = Depends(get_token)) -> SUsersGet:
         raise UserIsNotPresentException
 
     user_dict = await UsersDAO.find_one_or_none(_id=ObjectId(user_id))
-    if not user_dict:
+    if not user_dict or user_dict.get("deletedAt"):
         raise UserIsNotPresentException
 
     return SUsersGet.model_validate(user_dict)
