@@ -8,8 +8,11 @@ from fastapi.responses import JSONResponse
 from app.config import settings
 from app.database import client_mongo
 from app.exceptions import AppError
+from app.calculation_rules.router import router as router_calculation_rules
+from app.calculator_config.router import router as router_calculator_config
 from app.integrations.registry import close_integrations, init_integrations
 from app.logger import logger
+from app.migrations.run import run_migrations
 from app.users.router import router as router_users
 from app.materials.router import router as router_materials
 from app.companies.router import router as router_companies
@@ -23,6 +26,7 @@ from app.adresses.router import router as router_adresses
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_integrations()
+    await run_migrations()
     yield
     await close_integrations()
     client_mongo.close()
@@ -53,6 +57,8 @@ app.include_router(router_users)
 app.include_router(router_materials)
 app.include_router(router_companies)
 app.include_router(router_deals)
+app.include_router(router_calculator_config)
+app.include_router(router_calculation_rules)
 app.include_router(router_services)
 app.include_router(router_stages)
 app.include_router(router_vehicles)

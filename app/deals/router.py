@@ -5,7 +5,14 @@ from starlette import status
 
 from app.core.pagination import PaginatedResponse, PaginationParams
 from app.deals.service import DealsService
-from app.deals.shemas import SDeals, SDealsAdd, SDealsWithRelations
+from app.deals.shemas import (
+    SDeals,
+    SDealsInput,
+    SDealsPreviewInput,
+    SDealsPreviewResult,
+    SDealsStageUpdate,
+    SDealsWithRelations,
+)
 from app.logger import logger
 from app.users.dependencies import get_current_admin_user, get_current_user
 from app.users.shemas import SUsersGet
@@ -46,26 +53,43 @@ async def get_deals_for_admins(
     return await DealsService.list_with_relations(data, user)
 
 
+@router.post("/preview", response_model=SDealsPreviewResult, summary="Предпросмотр расчётов по сделке")
+async def preview_deal(
+        data: SDealsPreviewInput,
+        user: SUsersGet = Depends(get_current_user),
+) -> SDealsPreviewResult:
+    return await DealsService.preview(data, user)
+
+
 @router.get("/{id}", response_model=SDealsWithRelations, summary="Получить сделку со связями")
 async def get_deal_with_relations(id: str, user: SUsersGet = Depends(get_current_user)):
     return await DealsService.get_with_relations(id, user)
 
 
 @router.post("", response_model=SDeals, summary="Добавить сделку", status_code=status.HTTP_201_CREATED)
-async def add_deal(data: SDealsAdd, user: SUsersGet = Depends(get_current_user)):
+async def add_deal(data: SDealsInput, user: SUsersGet = Depends(get_current_user)):
     return await DealsService.create(data, user)
 
 
 @router.patch("/{id}", response_model=SDeals, summary="Обновить сделку")
 async def update_deal(
         id: str,
-        data: SDealsAdd,
+        data: SDealsInput,
         background_tasks: BackgroundTasks,
         user: SUsersGet = Depends(get_current_user),
 ):
     result = await DealsService.update(id, data, user)
     background_tasks.add_task(logger.info, "Deal updated: id=%s", id)
     return result
+
+
+@router.patch("/{id}/stage", response_model=SDeals, summary="Обновить этап сделки")
+async def update_deal_stage(
+        id: str,
+        data: SDealsStageUpdate,
+        user: SUsersGet = Depends(get_current_user),
+):
+    return await DealsService.update_stage(id, str(data.stageId), user)
 
 
 @router.delete("/{id}", response_model=Optional[SDeals], summary="Мягкое удаление сделки")
