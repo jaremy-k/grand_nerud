@@ -21,6 +21,10 @@ poetry run uvicorn app.main:app --reload --port 5003
 
 Документация API: `http://localhost:5003/docs`
 
+## Документация
+
+- [Правила расчёта сделок (для клиента)](docs/calculation-rules.md) — API, формат `schema`, DSL, примеры запросов
+
 ## Docker
 
 ```bash
