@@ -1,4 +1,5 @@
 import asyncio
+import os
 import time
 from contextlib import asynccontextmanager
 
@@ -28,31 +29,32 @@ from app.adresses.router import router as router_adresses
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_integrations()
-    last_error: Exception | None = None
-    for attempt in range(1, 6):
-        try:
-            await run_migrations()
-            last_error = None
-            break
-        except OperationFailure as exc:
-            last_error = exc
-            if exc.code == 18:
-                logger.error(
-                    "MongoDB authentication failed. "
-                    "Check MONGO_INITDB_ROOT_USERNAME/PASSWORD in .env_prod "
-                    "and that they match the initialized mongo volume.",
-                )
-                raise
-            logger.warning("Migration attempt %s failed: %s", attempt, exc)
-        except ServerSelectionTimeoutError as exc:
-            last_error = exc
-            logger.warning("MongoDB not ready, retry %s/5: %s", attempt, exc)
-        if attempt < 5:
-            await asyncio.sleep(2)
+    if os.getenv("SKIP_STARTUP_MIGRATIONS") != "1":
+        last_error: Exception | None = None
+        for attempt in range(1, 6):
+            try:
+                await run_migrations()
+                last_error = None
+                break
+            except OperationFailure as exc:
+                last_error = exc
+                if exc.code == 18:
+                    logger.error(
+                        "MongoDB authentication failed. "
+                        "Check MONGO_INITDB_ROOT_USERNAME/PASSWORD in .env_prod "
+                        "and that they match the initialized mongo volume.",
+                    )
+                    raise
+                logger.warning("Migration attempt %s failed: %s", attempt, exc)
+            except ServerSelectionTimeoutError as exc:
+                last_error = exc
+                logger.warning("MongoDB not ready, retry %s/5: %s", attempt, exc)
+            if attempt < 5:
+                await asyncio.sleep(2)
 
-    if last_error is not None:
-        logger.error("Migrations failed after retries: %s", last_error)
-        raise last_error
+        if last_error is not None:
+            logger.error("Migrations failed after retries: %s", last_error)
+            raise last_error
 
     yield
     await close_integrations()

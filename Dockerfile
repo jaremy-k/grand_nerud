@@ -22,4 +22,4 @@ COPY . .
 
 RUN chmod a+x /grand_nerud/docker/*.sh
 
-CMD ["gunicorn", "app.main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind=0.0.0.0:5003"]
+CMD ["/grand_nerud/docker/app.sh"]

@@ -1,14 +1,19 @@
+import re
 from datetime import datetime, timezone
+
+from bson import ObjectId
 
 from app.calculator_config import repository as config_repo
 from app.calculator_config.models import CalculatorConfig
 from app.database import database_mongo
 from app.logger import logger
+from app.materials.repository import materials_repository
 from app.stages.repository import stages_repository
-from bson import ObjectId
 
 MIGRATIONS_COLLECTION = database_mongo["migrations"]
 STAGES_COLLECTION = database_mongo["stages"]
+MATERIALS_COLLECTION = database_mongo["materials"]
+DEALS_COLLECTION = database_mongo["deals"]
 
 DEFAULT_STAGES = [
     ("Согласование", 0),
@@ -17,6 +22,17 @@ DEFAULT_STAGES = [
     ("Заказ выполняется", 3),
     ("Выполнен", 4),
     ("Отменен", 5),
+]
+
+DEFAULT_MATERIALS = [
+    "Песок",
+    "Щебень",
+    "Гравий",
+    "ПГС",
+    "Отсев",
+    "Керамзит",
+    "Чернозём",
+    "Грунт",
 ]
 
 SERVICE_KINDS: dict[str, str] = {
@@ -47,6 +63,72 @@ async def _mark_applied(migration_id: str) -> None:
     )
 
 
+def _name_filter(name: str) -> dict:
+    return {"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}, "deletedAt": None}
+
+
+async def _ensure_named_entities(
+        collection,
+        repository,
+        items: list[tuple[str, dict | None]],
+) -> int:
+    created = 0
+    for name, extra_fields in items:
+        existing = await collection.find_one(_name_filter(name))
+        if existing:
+            if extra_fields:
+                await collection.update_one(
+                    {"_id": existing["_id"]},
+                    {"$set": extra_fields},
+                )
+            continue
+        document = {"name": name, **(extra_fields or {})}
+        await repository.create(document)
+        created += 1
+    return created
+
+
+async def migrate_stages_dedupe() -> None:
+    migration_id = "stages_v2_dedupe"
+    if await _is_applied(migration_id):
+        return
+
+    removed = 0
+    cursor = STAGES_COLLECTION.aggregate([
+        {"$match": {"deletedAt": None, "name": {"$exists": True, "$nin": [None, ""]}}},
+        {"$group": {
+            "_id": {"$toLower": {"$trim": {"input": "$name"}}},
+            "docs": {"$push": {"id": "$_id", "order": "$order"}},
+            "count": {"$sum": 1},
+        }},
+        {"$match": {"count": {"$gt": 1}}},
+    ])
+
+    async for group in cursor:
+        docs = sorted(
+            group["docs"],
+            key=lambda doc: (
+                doc.get("order") if doc.get("order") is not None else 999,
+                str(doc["id"]),
+            ),
+        )
+        keep_id = docs[0]["id"]
+        for duplicate in docs[1:]:
+            duplicate_id = duplicate["id"]
+            await DEALS_COLLECTION.update_many(
+                {"stageId": duplicate_id},
+                {"$set": {"stageId": keep_id}},
+            )
+            await STAGES_COLLECTION.update_one(
+                {"_id": duplicate_id},
+                {"$set": {"deletedAt": datetime.now(timezone.utc)}},
+            )
+            removed += 1
+
+    logger.info("Migration: deduped stages (removed=%s)", removed)
+    await _mark_applied(migration_id)
+
+
 async def migrate_calculator_config() -> None:
     migration_id = "calculator_config_v1"
     if await _is_applied(migration_id):
@@ -74,27 +156,28 @@ async def migrate_stages() -> None:
     if await _is_applied(migration_id):
         return
 
-    existing_stages = await stages_repository.find_many(
-        filter_by={"deletedAt": None},
-        limit=1000,
+    created = await _ensure_named_entities(
+        STAGES_COLLECTION,
+        stages_repository,
+        [(name, {"order": order}) for name, order in DEFAULT_STAGES],
     )
-    existing_names = {
-        (stage.get("name") or "").strip().lower()
-        for stage in existing_stages
-    }
-
-    created = 0
-    for name, order in DEFAULT_STAGES:
-        if name.lower() in existing_names:
-            await STAGES_COLLECTION.update_one(
-                {"name": {"$regex": f"^{name}$", "$options": "i"}, "deletedAt": None},
-                {"$set": {"order": order}},
-            )
-            continue
-        await stages_repository.create({"name": name, "order": order})
-        created += 1
 
     logger.info("Migration: stages seeded/updated (created=%s)", created)
+    await _mark_applied(migration_id)
+
+
+async def migrate_materials() -> None:
+    migration_id = "materials_v1"
+    if await _is_applied(migration_id):
+        return
+
+    created = await _ensure_named_entities(
+        MATERIALS_COLLECTION,
+        materials_repository,
+        [(name, None) for name in DEFAULT_MATERIALS],
+    )
+
+    logger.info("Migration: materials seeded (created=%s)", created)
     await _mark_applied(migration_id)
 
 
@@ -135,13 +218,6 @@ async def migrate_services_kinds() -> None:
     await _mark_applied(migration_id)
 
 
-async def run_migrations() -> None:
-    await migrate_calculator_config()
-    await migrate_stages()
-    await migrate_services_kinds()
-    await migrate_calculation_rules()
-
-
 async def migrate_calculation_rules() -> None:
     migration_id = "calculation_rules_v1"
     if await _is_applied(migration_id):
@@ -151,3 +227,12 @@ async def migrate_calculation_rules() -> None:
     await CalculationRulesService.seed_default_rule_if_empty()
     logger.info("Migration: default calculation rules seeded")
     await _mark_applied(migration_id)
+
+
+async def run_migrations() -> None:
+    await migrate_stages_dedupe()
+    await migrate_calculator_config()
+    await migrate_stages()
+    await migrate_materials()
+    await migrate_services_kinds()
+    await migrate_calculation_rules()
