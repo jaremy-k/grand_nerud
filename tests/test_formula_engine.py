@@ -1,8 +1,9 @@
 import pytest
 
-from app.calculation_rules.defaults import DEFAULT_CALCULATION_FIELDS
+from app.calculation_rules.defaults import DEFAULT_RULE_SCHEMA
 from app.calculator_config.models import CalculatorConfig
 from app.exceptions import ValidationError
+from app.formula_engine.compiler import compile_schema, extract_dependencies
 from app.formula_engine.context import sample_context
 from app.formula_engine.engine import FormulaEngine
 from app.formula_engine.evaluator import evaluate_expression
@@ -17,22 +18,22 @@ def test_evaluate_simple_expression():
 
 def test_evaluate_conditional_nds():
     ctx = sample_context(CONFIG)
-    ctx["storedNdsPercent"] = 0.18
     result = evaluate_expression(
-        "storedNdsPercent if storedNdsPercent is not None else ndsPercentConfig",
+        "ndsPercentConfig if paymentMethod == nonCashPaymentMethod else 0",
         ctx,
     )
-    assert result == 0.18
+    assert result == 0.22
 
 
 def test_default_rules_validate():
-    errors = FormulaEngine.validate_fields(DEFAULT_CALCULATION_FIELDS, CONFIG)
+    errors = FormulaEngine.validate_schema(DEFAULT_RULE_SCHEMA, CONFIG)
     assert errors == []
 
 
 def test_default_rules_compute_company_profit():
-    results = FormulaEngine.evaluate_fields(
-        fields=DEFAULT_CALCULATION_FIELDS,
+    compiled = compile_schema(DEFAULT_RULE_SCHEMA)
+    results = FormulaEngine.evaluate_rule(
+        compiled=compiled,
         deal_data={
             "quantity": 10,
             "amountPurchaseUnit": 100,
@@ -44,7 +45,6 @@ def test_default_rules_compute_company_profit():
         },
         config=CONFIG,
         user_profit={"nonCash": {"alone": 0.1}},
-        stored_nds_percent=None,
     )
     assert results["amountSalesTotal"] == 2000
     assert results["companyProfit"] == 300
@@ -52,9 +52,10 @@ def test_default_rules_compute_company_profit():
     assert results["ndsPercent"] == 0.22
 
 
-def test_historical_nds_in_rules():
-    results = FormulaEngine.evaluate_fields(
-        fields=DEFAULT_CALCULATION_FIELDS,
+def test_snapshot_nds_preserved_from_deal():
+    compiled = compile_schema(DEFAULT_RULE_SCHEMA)
+    results = FormulaEngine.evaluate_rule(
+        compiled=compiled,
         deal_data={
             "quantity": 1,
             "amountPurchaseUnit": 0,
@@ -63,14 +64,41 @@ def test_historical_nds_in_rules():
             "paymentMethod": CONFIG.non_cash_payment_method,
             "addExpenses": [],
             "deliveredQuantity": [],
+            "ndsPercent": 0.18,
         },
         config=CONFIG,
         user_profit=None,
-        stored_nds_percent=0.18,
     )
     assert results["ndsPercent"] == 0.18
+
+
+def test_topological_sort_allows_any_formula_order():
+    reordered = {
+        **DEFAULT_RULE_SCHEMA,
+        "formulas": dict(reversed(list(DEFAULT_RULE_SCHEMA["formulas"].items()))),
+    }
+    errors = FormulaEngine.validate_schema(reordered, CONFIG)
+    assert errors == []
+
+
+def test_cyclic_dependency_rejected():
+    schema = {
+        "inputs": DEFAULT_RULE_SCHEMA["inputs"],
+        "formulas": {
+            "a": {"expr": "b + 1"},
+            "b": {"expr": "a + 1"},
+        },
+        "metadata": {},
+    }
+    with pytest.raises(ValidationError):
+        compile_schema(schema)
 
 
 def test_unknown_variable_rejected():
     with pytest.raises(ValidationError):
         evaluate_expression("unknownVar + 1", {})
+
+
+def test_extract_dependencies():
+    deps = extract_dependencies("amountSalesTotal - amountPurchaseTotal")
+    assert deps == {"amountSalesTotal", "amountPurchaseTotal"}

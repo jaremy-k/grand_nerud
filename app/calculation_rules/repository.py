@@ -35,11 +35,18 @@ async def insert(document: dict[str, Any]) -> dict[str, Any] | None:
     return await _collection.find_one({"_id": result.inserted_id})
 
 
-async def update(rule_id: str, data: dict[str, Any]) -> dict[str, Any] | None:
+async def update(
+        rule_id: str,
+        data: dict[str, Any],
+        unset: list[str] | None = None,
+) -> dict[str, Any] | None:
     if not ObjectId.is_valid(rule_id):
         return None
     oid = ObjectId(rule_id)
-    await _collection.update_one({"_id": oid}, {"$set": data})
+    update_doc: dict[str, Any] = {"$set": data}
+    if unset:
+        update_doc["$unset"] = {field: "" for field in unset}
+    await _collection.update_one({"_id": oid}, update_doc)
     return await _collection.find_one({"_id": oid})
 
 

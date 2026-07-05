@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.exceptions import ValidationError
+from app.formula_engine.compiler import CompiledRule, compile_schema, normalize_rule_document, validate_rule
 from app.formula_engine.context import build_evaluation_context, sample_context
 from app.formula_engine.evaluator import evaluate_expression
 from app.formula_engine.functions import DSL_FUNCTION_DOCS, DSL_VARIABLE_DOCS
@@ -8,69 +8,51 @@ from app.formula_engine.functions import DSL_FUNCTION_DOCS, DSL_VARIABLE_DOCS
 
 class FormulaEngine:
     @staticmethod
-    def evaluate_fields(
-            fields: list[dict],
+    def compile(rule_doc_or_schema: dict) -> CompiledRule:
+        if rule_doc_or_schema.get("formulas") or rule_doc_or_schema.get("inputs"):
+            return compile_schema(rule_doc_or_schema)
+        return normalize_rule_document(rule_doc_or_schema)
+
+    @staticmethod
+    def evaluate_rule(
+            compiled: CompiledRule,
             deal_data: dict,
             config,
             user_profit: dict | None = None,
-            stored_nds_percent: float | None = None,
     ) -> dict[str, Any]:
         ctx = build_evaluation_context(
             deal_data=deal_data,
             config=config,
             user_profit=user_profit,
-            stored_nds_percent=stored_nds_percent,
         )
         results: dict[str, Any] = {}
-        for field in fields:
-            name = field["name"]
-            expression = field["expression"]
-            value = evaluate_expression(expression, ctx)
+
+        for formula in compiled.formulas:
+            name = formula.name
+            if formula.snapshot and deal_data.get(name) is not None:
+                value = deal_data[name]
+                if isinstance(value, (int, float)):
+                    value = float(value)
+                ctx[name] = value
+                results[name] = value
+                continue
+
+            value = evaluate_expression(formula.expression, ctx)
             if isinstance(value, (int, float)):
                 value = float(value)
             ctx[name] = value
             results[name] = value
+
         return results
 
     @staticmethod
-    def stored_field_names(fields: list[dict]) -> set[str]:
-        return {field["name"] for field in fields if field.get("store", True)}
+    def snapshot_field_names(compiled: CompiledRule) -> set[str]:
+        return compiled.snapshot_names
 
     @staticmethod
-    def preview_field_names(fields: list[dict]) -> set[str]:
-        return {field["name"] for field in fields if not field.get("store", True)}
-
-    @staticmethod
-    def validate_fields(fields: list[dict], config) -> list[str]:
-        errors: list[str] = []
-        names: set[str] = set()
-        ctx = sample_context(config)
-
-        for index, field in enumerate(fields):
-            name = field.get("name", "").strip()
-            expression = field.get("expression", "").strip()
-            prefix = f"Поле #{index + 1}"
-
-            if not name:
-                errors.append(f"{prefix}: не указано имя")
-                continue
-            if name in names:
-                errors.append(f"{prefix} ({name}): дублирующееся имя")
-            names.add(name)
-
-            if not expression:
-                errors.append(f"{prefix} ({name}): пустая формула")
-                continue
-
-            try:
-                value = evaluate_expression(expression, dict(ctx))
-                if isinstance(value, (int, float)):
-                    value = float(value)
-                ctx[name] = value
-            except ValidationError as exc:
-                errors.append(f"{prefix} ({name}): {exc.detail}")
-
-        return errors
+    def validate_schema(schema: dict, config) -> list[str]:
+        compiled = compile_schema(schema)
+        return validate_rule(compiled, config)
 
     @staticmethod
     def get_dsl_docs() -> dict:
@@ -81,6 +63,7 @@ class FormulaEngine:
                 "Python-подобные выражения: +, -, *, /, **, сравнения, and/or/not",
                 "Условие: value_if_true if condition else value_if_false",
                 "Пример: amountSalesUnit * quantity",
-                "Пример НДС: storedNdsPercent if storedNdsPercent is not None else (ndsPercentConfig if paymentMethod == nonCashPaymentMethod else 0)",
+                "Пример НДС: ndsPercentConfig if paymentMethod == nonCashPaymentMethod else 0",
+                "Поля с snapshot: true сохраняются в сделке и не пересчитываются",
             ],
         }

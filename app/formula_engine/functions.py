@@ -77,7 +77,6 @@ DSL_VARIABLE_DOCS = [
     {"name": "defaultManagerShare", "description": "Дефолтная доля менеджера"},
     {"name": "cashPaymentMethod", "description": "Строка «наличный расчёт»"},
     {"name": "nonCashPaymentMethod", "description": "Строка «безналичный расчёт»"},
-    {"name": "storedNdsPercent", "description": "Записанный НДС сделки (историчность)"},
     {"name": "addExpenses", "description": "Список доп. расходов (через функции)"},
     {"name": "deliveredQuantity", "description": "Список доставок (через функции)"},
 ]

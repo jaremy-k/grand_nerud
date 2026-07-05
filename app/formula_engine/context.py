@@ -1,14 +1,13 @@
 from typing import Any
 
 from app.calculator_config.models import CalculatorConfig
-from app.deals.calculator import get_manager_share
+from app.formula_engine.profit import get_manager_share
 
 
 def build_evaluation_context(
         deal_data: dict,
         config: CalculatorConfig,
         user_profit: dict | None = None,
-        stored_nds_percent: float | None = None,
         extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payment_method = deal_data.get("paymentMethod")
@@ -25,7 +24,6 @@ def build_evaluation_context(
         "defaultManagerShare": config.default_manager_share,
         "cashPaymentMethod": config.cash_payment_method,
         "nonCashPaymentMethod": config.non_cash_payment_method,
-        "storedNdsPercent": stored_nds_percent,
         "addExpenses": deal_data.get("addExpenses") or [],
         "deliveredQuantity": deal_data.get("deliveredQuantity") or [],
     }
@@ -51,5 +49,4 @@ def sample_context(config: CalculatorConfig | None = None) -> dict[str, Any]:
         },
         config=cfg,
         user_profit={"nonCash": {"alone": 0.1}},
-        stored_nds_percent=None,
     )

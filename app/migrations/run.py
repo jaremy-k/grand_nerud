@@ -229,6 +229,58 @@ async def migrate_calculation_rules() -> None:
     await _mark_applied(migration_id)
 
 
+async def migrate_calculation_rules_schema() -> None:
+    migration_id = "calculation_rules_v2"
+    if await _is_applied(migration_id):
+        return
+
+    from app.formula_engine.compiler import legacy_fields_to_schema
+
+    rules_collection = database_mongo["calculation_rules"]
+    cursor = rules_collection.find({"fields": {"$exists": True}})
+    migrated = 0
+    async for doc in cursor:
+        schema = legacy_fields_to_schema(doc["fields"])
+        await rules_collection.update_one(
+            {"_id": doc["_id"]},
+            {"$set": {"schema": schema}, "$unset": {"fields": ""}},
+        )
+        migrated += 1
+
+    from app.calculation_rules.service import CalculationRulesService
+    CalculationRulesService.invalidate_cache()
+    logger.info("Migration: calculation rules schema migrated (count=%s)", migrated)
+    await _mark_applied(migration_id)
+
+
+_DEAL_COMPUTED_FIELDS = (
+    "amountPurchaseTotal",
+    "amountSalesTotal",
+    "ndsAmount",
+    "companyProfit",
+    "managerProfit",
+    "totalAmount",
+    "actualCompanyProfit",
+    "actualAmountSalesTotal",
+    "actualAmountPurchaseTotal",
+    "totalDeliveredQuantity",
+    "managerShare",
+)
+
+
+async def migrate_deals_strip_computed() -> None:
+    migration_id = "deals_strip_computed_v1"
+    if await _is_applied(migration_id):
+        return
+
+    result = await DEALS_COLLECTION.update_many(
+        {},
+        {"$unset": {field: "" for field in _DEAL_COMPUTED_FIELDS}},
+    )
+    logger.info("Migration: stripped computed deal fields (modified=%s)", result.modified_count)
+    await _mark_applied(migration_id)
+
+
 async def run_migrations() -> None:
     await migrate_stages_dedupe()
     await migrate_calculator_config()
@@ -236,3 +288,5 @@ async def run_migrations() -> None:
     await migrate_materials()
     await migrate_services_kinds()
     await migrate_calculation_rules()
+    await migrate_calculation_rules_schema()
+    await migrate_deals_strip_computed()

@@ -1,79 +1,81 @@
-DEFAULT_CALCULATION_FIELDS = [
-    {
-        "name": "ndsPercent",
-        "label": "Ставка НДС",
-        "description": "Сохраняется в сделке; для старых сделок используется записанное значение",
-        "expression": (
-            "storedNdsPercent if storedNdsPercent is not None "
-            "else (ndsPercentConfig if paymentMethod == nonCashPaymentMethod else 0)"
-        ),
-        "store": True,
-    },
-    {
-        "name": "amountSalesTotal",
-        "label": "Сумма от клиента",
-        "expression": "amountSalesUnit * quantity",
-        "store": True,
-    },
-    {
-        "name": "amountPurchaseTotal",
-        "label": "Сумма закупки",
-        "expression": "amountPurchaseUnit * quantity",
-        "store": True,
-    },
-    {
-        "name": "ndsAmount",
-        "label": "Сумма НДС",
-        "expression": "(amountSalesTotal / (1 + ndsPercent)) * ndsPercent if ndsPercent else 0",
-        "store": True,
-    },
-    {
-        "name": "companyProfit",
-        "label": "Маржа",
-        "expression": "amountSalesTotal - amountPurchaseTotal - amountDelivery - sumExpenses(addExpenses)",
-        "store": True,
-    },
-    {
-        "name": "managerProfit",
-        "label": "Доход менеджера",
-        "expression": "companyProfit * managerShare",
-        "store": True,
-    },
-    {
-        "name": "totalAmount",
-        "label": "Итоговая сумма",
-        "expression": "amountSalesTotal",
-        "store": True,
-    },
-    {
-        "name": "totalDeliveredQuantity",
-        "label": "Доставлено (объём)",
-        "expression": "sumDeliveredQuantity(deliveredQuantity)",
-        "store": False,
-    },
-    {
-        "name": "actualAmountSalesTotal",
-        "label": "Факт. сумма от клиента",
-        "expression": "amountSalesUnit * totalDeliveredQuantity if totalDeliveredQuantity > 0 else 0",
-        "store": False,
-    },
-    {
-        "name": "actualAmountPurchaseTotal",
-        "label": "Факт. сумма закупки",
-        "expression": "sumDeliveredPurchase(deliveredQuantity, amountPurchaseUnit)",
-        "store": False,
-    },
-    {
-        "name": "actualCompanyProfit",
-        "label": "Фактическая прибыль",
-        "expression": (
-            "actualAmountSalesTotal - actualAmountPurchaseTotal "
-            "- amountDelivery * deliveryShare(totalDeliveredQuantity, quantity) "
-            "- sumExpenses(addExpenses) * deliveryShare(totalDeliveredQuantity, quantity) "
-            "if totalDeliveredQuantity > 0 and quantity > 0 else 0"
-        ),
-        "store": False,
-    },
-]
-
 DEFAULT_RULE_NAME = "Стандартный расчёт сделки"
+
+DEFAULT_RULE_INPUTS = {
+    "deal": [
+        "quantity",
+        "amountPurchaseUnit",
+        "amountSalesUnit",
+        "amountDelivery",
+        "paymentMethod",
+        "addExpenses",
+        "deliveredQuantity",
+    ],
+    "config": [
+        "ndsPercentConfig",
+        "defaultManagerShare",
+        "cashPaymentMethod",
+        "nonCashPaymentMethod",
+    ],
+    "user": ["managerShare"],
+}
+
+DEFAULT_RULE_SCHEMA = {
+    "inputs": DEFAULT_RULE_INPUTS,
+    "formulas": {
+        "ndsPercent": {
+            "expr": "ndsPercentConfig if paymentMethod == nonCashPaymentMethod else 0",
+            "snapshot": True,
+        },
+        "amountSalesTotal": {
+            "expr": "amountSalesUnit * quantity",
+        },
+        "amountPurchaseTotal": {
+            "expr": "amountPurchaseUnit * quantity",
+        },
+        "ndsAmount": {
+            "expr": "(amountSalesTotal / (1 + ndsPercent)) * ndsPercent if ndsPercent else 0",
+        },
+        "companyProfit": {
+            "expr": "amountSalesTotal - amountPurchaseTotal - amountDelivery - sumExpenses(addExpenses)",
+        },
+        "managerProfit": {
+            "expr": "companyProfit * managerShare",
+        },
+        "totalAmount": {
+            "expr": "amountSalesTotal",
+        },
+        "totalDeliveredQuantity": {
+            "expr": "sumDeliveredQuantity(deliveredQuantity)",
+        },
+        "actualAmountSalesTotal": {
+            "expr": "amountSalesUnit * totalDeliveredQuantity if totalDeliveredQuantity > 0 else 0",
+        },
+        "actualAmountPurchaseTotal": {
+            "expr": "sumDeliveredPurchase(deliveredQuantity, amountPurchaseUnit)",
+        },
+        "actualCompanyProfit": {
+            "expr": (
+                "actualAmountSalesTotal - actualAmountPurchaseTotal "
+                "- amountDelivery * deliveryShare(totalDeliveredQuantity, quantity) "
+                "- sumExpenses(addExpenses) * deliveryShare(totalDeliveredQuantity, quantity) "
+                "if totalDeliveredQuantity > 0 and quantity > 0 else 0"
+            ),
+        },
+    },
+    "metadata": {
+        "ndsPercent": {
+            "label": "Ставка НДС",
+            "description": "Сохраняется в сделке; для старых сделок используется записанное значение",
+        },
+        "amountSalesTotal": {"label": "Сумма от клиента"},
+        "amountPurchaseTotal": {"label": "Сумма закупки"},
+        "ndsAmount": {"label": "Сумма НДС"},
+        "companyProfit": {"label": "Маржа"},
+        "managerProfit": {"label": "Доход менеджера"},
+        "totalAmount": {"label": "Итоговая сумма"},
+        "totalDeliveredQuantity": {"label": "Доставлено (объём)"},
+        "actualAmountSalesTotal": {"label": "Факт. сумма от клиента"},
+        "actualAmountPurchaseTotal": {"label": "Факт. сумма закупки"},
+        "actualCompanyProfit": {"label": "Фактическая прибыль"},
+    },
+}

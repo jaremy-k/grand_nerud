@@ -1,23 +1,23 @@
 from datetime import datetime
 
 from app.calculation_rules import repository as rules_repo
-from app.calculation_rules.defaults import DEFAULT_CALCULATION_FIELDS, DEFAULT_RULE_NAME
+from app.calculation_rules.defaults import DEFAULT_RULE_NAME, DEFAULT_RULE_SCHEMA
 from app.calculation_rules.shemas import (
     CalculationRuleCreate,
     CalculationRuleDto,
+    CalculationRuleSchema,
     CalculationRuleTestInput,
     CalculationRuleTestResult,
     CalculationRuleUpdate,
     CalculationRuleValidateResult,
-    FormulaFieldSchema,
 )
 from app.calculator_config.models import CalculatorConfig
 from app.calculator_config.service import CalculatorConfigService
 from app.core.mongo_utils import serialize_mongo_doc
 from app.exceptions import NotFoundError, ValidationError
+from app.formula_engine.compiler import compile_schema, normalize_rule_document
 from app.formula_engine.context import sample_context
 from app.formula_engine.engine import FormulaEngine
-from app.formula_engine.evaluator import evaluate_expression
 
 
 class CalculationRulesService:
@@ -31,11 +31,19 @@ class CalculationRulesService:
 
     @classmethod
     def _to_dto(cls, doc: dict) -> CalculationRuleDto:
-        return CalculationRuleDto.model_validate(serialize_mongo_doc(doc))
+        serialized = serialize_mongo_doc(doc)
+        if not serialized.get("schema") and doc.get("fields"):
+            from app.formula_engine.compiler import legacy_fields_to_schema
+            serialized["schema"] = legacy_fields_to_schema(doc["fields"])
+        return CalculationRuleDto.model_validate(serialized)
 
     @classmethod
-    def _fields_to_dicts(cls, fields: list[FormulaFieldSchema]) -> list[dict]:
-        return [field.model_dump() for field in fields]
+    def _schema_to_dict(cls, schema: CalculationRuleSchema) -> dict:
+        return schema.model_dump()
+
+    @classmethod
+    def _compile_rule_doc(cls, doc: dict):
+        return normalize_rule_document(doc)
 
     @classmethod
     async def list_rules(cls) -> list[CalculationRuleDto]:
@@ -76,8 +84,8 @@ class CalculationRulesService:
     @classmethod
     async def create_rule(cls, data: CalculationRuleCreate) -> CalculationRuleDto:
         config = await CalculatorConfigService.get_config()
-        fields = cls._fields_to_dicts(data.fields)
-        errors = FormulaEngine.validate_fields(fields, config)
+        schema_dict = cls._schema_to_dict(data.schema)
+        errors = FormulaEngine.validate_schema(schema_dict, config)
         if errors:
             raise ValidationError("; ".join(errors))
 
@@ -91,7 +99,7 @@ class CalculationRulesService:
             "name": data.name,
             "version": version,
             "isActive": data.isActive,
-            "fields": fields,
+            "schema": schema_dict,
             "createdAt": now,
             "updatedAt": now,
         }
@@ -109,13 +117,17 @@ class CalculationRulesService:
         payload: dict = {"updatedAt": datetime.now()}
         if data.name is not None:
             payload["name"] = data.name
-        if data.fields is not None:
+        if data.schema is not None:
             config = await CalculatorConfigService.get_config()
-            fields = cls._fields_to_dicts(data.fields)
-            errors = FormulaEngine.validate_fields(fields, config)
+            schema_dict = cls._schema_to_dict(data.schema)
+            errors = FormulaEngine.validate_schema(schema_dict, config)
             if errors:
                 raise ValidationError("; ".join(errors))
-            payload["fields"] = fields
+            payload["schema"] = schema_dict
+
+        unset_fields: list[str] = []
+        if data.schema is not None:
+            unset_fields.append("fields")
 
         if data.isActive is True:
             await rules_repo.deactivate_all()
@@ -126,7 +138,7 @@ class CalculationRulesService:
             if str(existing.get("_id")) == cls._active_cache_id:
                 cls.invalidate_cache()
 
-        updated = await rules_repo.update(rule_id, payload)
+        updated = await rules_repo.update(rule_id, payload, unset=unset_fields or None)
         if not updated:
             raise ValidationError("Не удалось обновить набор правил")
         return cls._to_dto(updated)
@@ -136,32 +148,35 @@ class CalculationRulesService:
         return await cls.update_rule(rule_id, CalculationRuleUpdate(isActive=True))
 
     @classmethod
-    async def validate_fields(cls, fields: list[FormulaFieldSchema]) -> CalculationRuleValidateResult:
+    async def validate_schema(cls, schema: CalculationRuleSchema) -> CalculationRuleValidateResult:
         config = await CalculatorConfigService.get_config()
-        field_dicts = cls._fields_to_dicts(fields)
-        errors = FormulaEngine.validate_fields(field_dicts, config)
+        errors = FormulaEngine.validate_schema(cls._schema_to_dict(schema), config)
         return CalculationRuleValidateResult(valid=not errors, errors=errors)
 
     @classmethod
-    async def test_fields(cls, data: CalculationRuleTestInput) -> CalculationRuleTestResult:
+    async def test_schema(cls, data: CalculationRuleTestInput) -> CalculationRuleTestResult:
         config = await CalculatorConfigService.get_config()
-        field_dicts = cls._fields_to_dicts(data.fields)
-        errors = FormulaEngine.validate_fields(field_dicts, config)
+        schema_dict = cls._schema_to_dict(data.schema)
+        errors = FormulaEngine.validate_schema(schema_dict, config)
         if errors:
             return CalculationRuleTestResult(results={}, errors=errors)
 
+        compiled = compile_schema(schema_dict)
         ctx = data.context or sample_context(config)
-        results: dict = {}
-        runtime_ctx = dict(ctx)
+        deal_data = {
+            key: ctx[key]
+            for key in compiled.input_names
+            if key in ctx
+        }
         try:
-            for field in field_dicts:
-                value = evaluate_expression(field["expression"], runtime_ctx)
-                if isinstance(value, (int, float)):
-                    value = float(value)
-                runtime_ctx[field["name"]] = value
-                results[field["name"]] = value
+            results = FormulaEngine.evaluate_rule(
+                compiled=compiled,
+                deal_data=deal_data,
+                config=config,
+                user_profit={"nonCash": {"alone": ctx.get("managerShare", 0.1)}},
+            )
         except ValidationError as exc:
-            return CalculationRuleTestResult(results=results, errors=[exc.detail])
+            return CalculationRuleTestResult(results={}, errors=[exc.detail])
 
         return CalculationRuleTestResult(results=results, errors=[])
 
@@ -171,41 +186,37 @@ class CalculationRulesService:
             deal_data: dict,
             user_profit: dict | None,
             config: CalculatorConfig,
-            stored_nds_percent: float | None = None,
             rule_id: str | None = None,
     ) -> tuple[dict, str, int]:
         rule_doc = await cls.resolve_rule_document(rule_id)
-        fields = rule_doc.get("fields") or []
-        results = FormulaEngine.evaluate_fields(
-            fields=fields,
+        compiled = cls._compile_rule_doc(rule_doc)
+        results = FormulaEngine.evaluate_rule(
+            compiled=compiled,
             deal_data=deal_data,
             config=config,
             user_profit=user_profit,
-            stored_nds_percent=stored_nds_percent,
         )
         return results, str(rule_doc["_id"]), int(rule_doc.get("version") or 1)
 
     @classmethod
-    async def compute_stored_deal_fields(
+    async def compute_deal_snapshots(
             cls,
             deal_data: dict,
             user_profit: dict | None,
             config: CalculatorConfig,
-            stored_nds_percent: float | None = None,
             rule_id: str | None = None,
     ) -> tuple[dict, str, int]:
         rule_doc = await cls.resolve_rule_document(rule_id)
-        fields = rule_doc.get("fields") or []
-        results = FormulaEngine.evaluate_fields(
-            fields=fields,
+        compiled = cls._compile_rule_doc(rule_doc)
+        results = FormulaEngine.evaluate_rule(
+            compiled=compiled,
             deal_data=deal_data,
             config=config,
             user_profit=user_profit,
-            stored_nds_percent=stored_nds_percent,
         )
-        stored_names = FormulaEngine.stored_field_names(fields)
-        stored = {key: value for key, value in results.items() if key in stored_names}
-        return stored, str(rule_doc["_id"]), int(rule_doc.get("version") or 1)
+        snapshot_names = FormulaEngine.snapshot_field_names(compiled)
+        snapshots = {key: value for key, value in results.items() if key in snapshot_names}
+        return snapshots, str(rule_doc["_id"]), int(rule_doc.get("version") or 1)
 
     @classmethod
     def get_dsl_docs(cls):
@@ -227,7 +238,7 @@ class CalculationRulesService:
             "name": DEFAULT_RULE_NAME,
             "version": 1,
             "isActive": True,
-            "fields": DEFAULT_CALCULATION_FIELDS,
+            "schema": DEFAULT_RULE_SCHEMA,
             "createdAt": now,
             "updatedAt": now,
         })

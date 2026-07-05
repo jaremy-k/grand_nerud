@@ -5,11 +5,11 @@ from app.calculation_rules.shemas import (
     CalculationRuleCreate,
     CalculationRuleDto,
     CalculationRuleDslDocs,
+    CalculationRuleSchema,
     CalculationRuleTestInput,
     CalculationRuleTestResult,
     CalculationRuleUpdate,
     CalculationRuleValidateResult,
-    FormulaFieldSchema,
 )
 from app.formula_engine.engine import FormulaEngine
 from app.users.dependencies import get_current_admin_user, get_current_formula_access_user
@@ -34,10 +34,10 @@ async def get_active_rule(_user: SUsersGet = Depends(get_current_formula_access_
 
 @router.post("/validate", response_model=CalculationRuleValidateResult, summary="Проверить формулы (админ)")
 async def validate_rules(
-        fields: list[FormulaFieldSchema],
+        schema: CalculationRuleSchema,
         _user: SUsersGet = Depends(get_current_admin_user),
 ) -> CalculationRuleValidateResult:
-    return await CalculationRulesService.validate_fields(fields)
+    return await CalculationRulesService.validate_schema(schema)
 
 
 @router.post("/test", response_model=CalculationRuleTestResult, summary="Тестовый прогон формул (админ)")
@@ -45,7 +45,7 @@ async def test_rules(
         data: CalculationRuleTestInput,
         _user: SUsersGet = Depends(get_current_admin_user),
 ) -> CalculationRuleTestResult:
-    return await CalculationRulesService.test_fields(data)
+    return await CalculationRulesService.test_schema(data)
 
 
 @router.get("", response_model=list[CalculationRuleDto], summary="Все наборы правил (админ)")

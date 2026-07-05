@@ -8,11 +8,11 @@ from app.calculator_config.service import CalculatorConfigService
 from app.core.mongo_utils import serialize_mongo_doc, serialize_mongo_docs
 from app.core.object_id import parse_object_id
 from app.core.pagination import PaginatedResponse, PaginationParams
-from app.deals.calculator import get_manager_share
 from app.deals.pipelines import build_deal_relations_pipeline
 from app.deals.repository import deals_repository
 from app.deals.shemas import SDeals, SDealsInput, SDealsPreviewInput, SDealsPreviewResult
 from app.exceptions import ForbiddenError, InternalError, NotFoundError, ValidationError
+from app.formula_engine.profit import get_manager_share
 from app.logger import logger
 from app.repositories.protocols import DealsRepositoryProtocol
 from app.users.shemas import SUsersGet
@@ -69,26 +69,17 @@ class DealsService:
         return str(rule_id)
 
     @classmethod
-    def _stored_nds_percent(cls, deal: dict) -> float | None:
-        value = deal.get("ndsPercent")
-        if value is None:
-            return None
-        return float(value)
-
-    @classmethod
-    async def _compute_stored(
+    async def _compute_snapshots(
             cls,
             deal_data: dict,
             user: SUsersGet,
-            stored_nds_percent: float | None = None,
             rule_id: str | None = None,
     ) -> tuple[dict, str, int]:
         config = await CalculatorConfigService.get_config()
-        return await CalculationRulesService.compute_stored_deal_fields(
+        return await CalculationRulesService.compute_deal_snapshots(
             deal_data=deal_data,
             user_profit=user.profit,
             config=config,
-            stored_nds_percent=stored_nds_percent,
             rule_id=rule_id,
         )
 
@@ -100,7 +91,6 @@ class DealsService:
             deal_data=deal,
             user_profit=profit,
             config=config,
-            stored_nds_percent=cls._stored_nds_percent(deal),
             rule_id=cls._rule_id_from_deal(deal),
         )
         computed["managerShare"] = get_manager_share(profit, deal.get("paymentMethod"), config)
@@ -188,7 +178,6 @@ class DealsService:
             deal_data=deal_data,
             user_profit=user.profit,
             config=config,
-            stored_nds_percent=None,
             rule_id=None,
         )
         manager_share = get_manager_share(user.profit, data.paymentMethod, config)
@@ -211,10 +200,10 @@ class DealsService:
     async def create(cls, data: SDealsInput, user: SUsersGet) -> dict:
         cls._validate_create(data)
         payload = cls._normalize_lists(data.model_dump(exclude_none=True))
-        stored, rule_id, rule_version = await cls._compute_stored(payload, user)
+        snapshots, rule_id, rule_version = await cls._compute_snapshots(payload, user)
         payload = {
             **payload,
-            **stored,
+            **snapshots,
             "calculationRuleId": ObjectId(rule_id),
             "calculationRuleVersion": rule_version,
         }
@@ -235,6 +224,7 @@ class DealsService:
             "paymentMethod": deal.get("paymentMethod"),
             "addExpenses": deal.get("addExpenses"),
             "deliveredQuantity": deal.get("deliveredQuantity"),
+            "ndsPercent": deal.get("ndsPercent"),
         }
 
     @classmethod
@@ -245,18 +235,16 @@ class DealsService:
             raise NotFoundError("Сделка не найдена")
         cls._ensure_access(existing, user)
 
+        payload = cls._normalize_lists(data.model_dump(exclude_none=True))
         calc_source = cls._normalize_lists({**cls._calculation_source(existing), **payload})
-        stored, rule_id, rule_version = await cls._compute_stored(
+        snapshots, _, _ = await cls._compute_snapshots(
             calc_source,
             user,
-            stored_nds_percent=cls._stored_nds_percent(existing),
             rule_id=cls._rule_id_from_deal(existing),
         )
         payload = {
             **payload,
-            **stored,
-            "calculationRuleId": ObjectId(rule_id),
-            "calculationRuleVersion": rule_version,
+            **snapshots,
             "updatedAt": datetime.now(),
         }
         result = await cls.repository.update_by_id(object_id=deal_id, update_data=payload)
