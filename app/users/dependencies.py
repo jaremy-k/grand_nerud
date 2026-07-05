@@ -44,3 +44,15 @@ async def get_current_admin_user(current_user: SUsersGet = Depends(get_current_u
     if not current_user.admin:
         raise ForbiddenError()
     return current_user
+
+
+async def get_current_privileged_user(current_user: SUsersGet = Depends(get_current_user)) -> SUsersGet:
+    if not current_user.is_privileged:
+        raise ForbiddenError()
+    return current_user
+
+
+async def get_current_formula_access_user(current_user: SUsersGet = Depends(get_current_user)) -> SUsersGet:
+    if current_user.manager and not current_user.admin:
+        raise ForbiddenError("Доступ к формулам запрещён")
+    return current_user

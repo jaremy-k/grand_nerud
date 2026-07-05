@@ -5,12 +5,12 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from app.adresses.service import AdressesService
 from app.adresses.shemas import SAdresses, SAdressesAdd
 from app.logger import logger
-from app.users.dependencies import get_current_admin_user
+from app.users.dependencies import get_current_privileged_user
 
 router = APIRouter(
     prefix="/adresses",
     tags=["Адреса"],
-    dependencies=[Depends(get_current_admin_user)],
+    dependencies=[Depends(get_current_privileged_user)],
 )
 
 

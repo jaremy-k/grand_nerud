@@ -25,7 +25,7 @@ class DealsService:
 
     @classmethod
     def _ensure_access(cls, deal: dict, user: SUsersGet) -> None:
-        if user.admin:
+        if user.is_privileged:
             return
         deal_user_id = deal.get("userId")
         if deal_user_id is None or str(deal_user_id) != str(user.id):
@@ -117,7 +117,7 @@ class DealsService:
             include_relations: bool = False,
             include_deleted: bool = False,
     ) -> PaginatedResponse:
-        if not user.admin:
+        if not user.is_privileged:
             filters.userId = ObjectId(user.id)
 
         filter_data = filters.model_dump(exclude_none=True)
@@ -144,7 +144,7 @@ class DealsService:
 
     @classmethod
     async def list_with_relations(cls, filters: SDeals, user: SUsersGet) -> list[dict]:
-        if not user.admin:
+        if not user.is_privileged:
             filters.userId = ObjectId(user.id)
         match_filter = filters.model_dump(exclude_none=True)
         if "deletedAt" not in match_filter:

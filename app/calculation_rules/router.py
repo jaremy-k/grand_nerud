@@ -12,7 +12,7 @@ from app.calculation_rules.shemas import (
     FormulaFieldSchema,
 )
 from app.formula_engine.engine import FormulaEngine
-from app.users.dependencies import get_current_admin_user, get_current_user
+from app.users.dependencies import get_current_admin_user, get_current_formula_access_user
 from app.users.shemas import SUsersGet
 
 router = APIRouter(
@@ -22,13 +22,13 @@ router = APIRouter(
 
 
 @router.get("/dsl-docs", response_model=CalculationRuleDslDocs, summary="Справка по DSL")
-async def get_dsl_docs(_user: SUsersGet = Depends(get_current_user)) -> CalculationRuleDslDocs:
+async def get_dsl_docs(_user: SUsersGet = Depends(get_current_formula_access_user)) -> CalculationRuleDslDocs:
     docs = FormulaEngine.get_dsl_docs()
     return CalculationRuleDslDocs(**docs)
 
 
 @router.get("/active", response_model=CalculationRuleDto, summary="Активный набор правил")
-async def get_active_rule(_user: SUsersGet = Depends(get_current_user)) -> CalculationRuleDto:
+async def get_active_rule(_user: SUsersGet = Depends(get_current_formula_access_user)) -> CalculationRuleDto:
     return await CalculationRulesService.get_active_rule()
 
 
@@ -62,7 +62,7 @@ async def create_rule(
 
 
 @router.get("/{rule_id}", response_model=CalculationRuleDto, summary="Набор правил по ID")
-async def get_rule(rule_id: str, _user: SUsersGet = Depends(get_current_user)) -> CalculationRuleDto:
+async def get_rule(rule_id: str, _user: SUsersGet = Depends(get_current_formula_access_user)) -> CalculationRuleDto:
     return await CalculationRulesService.get_rule(rule_id)
 
 

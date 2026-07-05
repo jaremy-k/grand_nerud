@@ -28,6 +28,7 @@ class SUsersGet(BaseModel):
     email: str | None = None
     profit: dict | None = None
     admin: bool | None = False
+    manager: bool | None = False
     hashed_password: str | None = None
     deletedAt: datetime | None = None
 
@@ -35,6 +36,11 @@ class SUsersGet(BaseModel):
     @property
     def isDeleted(self) -> bool:
         return self.deletedAt is not None
+
+    @computed_field
+    @property
+    def is_privileged(self) -> bool:
+        return bool(self.admin or self.manager)
 
     @field_validator("id", mode="before")
     def convert_objectid(cls, v):
@@ -55,6 +61,7 @@ class SUsersUpdate(BaseModel):
     fatherName: str | None = None
     profit: dict | None = None
     admin: bool | None = None
+    manager: bool | None = None
 
 
 class SUsersCreate(BaseModel):
@@ -65,6 +72,7 @@ class SUsersCreate(BaseModel):
     fatherName: str | None = None
     profit: dict | None = None
     admin: bool | None = False
+    manager: bool | None = False
 
 
 class SUsersGetResponse(BaseModel):
@@ -75,6 +83,7 @@ class SUsersGetResponse(BaseModel):
     email: str | None = None
     profit: dict | None = None
     admin: bool | None = False
+    manager: bool | None = False
     deletedAt: datetime | None = None
 
     @computed_field

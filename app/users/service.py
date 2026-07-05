@@ -5,7 +5,7 @@ from app.deals.repository import deals_repository
 from app.exceptions import ConflictError, ForbiddenError, InternalError, NotFoundError, UserAlreadyExistsError
 from app.users.auth import get_password_hash
 from app.users.repository import users_repository
-from app.users.shemas import SUsersCreate, SUsersUpdate
+from app.users.shemas import SUsersCreate, SUsersGet, SUsersUpdate
 
 
 class UsersService(BaseEntityService):
@@ -21,7 +21,7 @@ class UsersService(BaseEntityService):
         return await cls.repository.find_many(**query)
 
     @classmethod
-    async def create(cls, data: SUsersCreate) -> dict:
+    async def create(cls, data: SUsersCreate, caller: SUsersGet) -> dict:
         existing = await cls.repository.find_one(email=data.email)
         if existing:
             raise UserAlreadyExistsError()
@@ -29,7 +29,8 @@ class UsersService(BaseEntityService):
         document = {
             "email": data.email,
             "hashed_password": get_password_hash(data.password),
-            "admin": data.admin or False,
+            "admin": (data.admin or False) if caller.admin else False,
+            "manager": (data.manager or False) if caller.is_privileged else False,
             "name": data.name,
             "lastName": data.lastName,
             "fatherName": data.fatherName,
@@ -43,7 +44,7 @@ class UsersService(BaseEntityService):
         return result
 
     @classmethod
-    async def update(cls, user_id: str, data: SUsersUpdate, is_admin: bool = False) -> dict:
+    async def update(cls, user_id: str, data: SUsersUpdate, caller: SUsersGet) -> dict:
         existing = await cls.repository.find_one(_id=ObjectId(user_id))
         if not existing:
             raise NotFoundError(cls.not_found_detail)
@@ -53,10 +54,15 @@ class UsersService(BaseEntityService):
 
         update_data = data.model_dump(exclude_none=True)
 
-        if "admin" in update_data and not is_admin:
+        if "admin" in update_data and not caller.admin:
             raise ForbiddenError("Недостаточно прав для изменения роли администратора")
-        if not is_admin:
+        if not caller.admin:
             update_data.pop("admin", None)
+
+        if "manager" in update_data and not caller.is_privileged:
+            raise ForbiddenError("Недостаточно прав для изменения роли руководителя")
+        if not caller.is_privileged:
+            update_data.pop("manager", None)
 
         if "password" in update_data:
             update_data["hashed_password"] = get_password_hash(update_data.pop("password"))

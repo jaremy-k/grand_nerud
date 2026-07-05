@@ -14,7 +14,7 @@ from app.deals.shemas import (
     SDealsWithRelations,
 )
 from app.logger import logger
-from app.users.dependencies import get_current_admin_user, get_current_user
+from app.users.dependencies import get_current_privileged_user, get_current_user
 from app.users.shemas import SUsersGet
 
 router = APIRouter(
@@ -45,10 +45,10 @@ async def get_deals(
     )
 
 
-@router.get("/admin/all", response_model=list[SDealsWithRelations], summary="Сделки со связями (админ)")
+@router.get("/admin/all", response_model=list[SDealsWithRelations], summary="Сделки со связями (админ/руководитель)")
 async def get_deals_for_admins(
         data: SDeals = Depends(),
-        user: SUsersGet = Depends(get_current_admin_user),
+        user: SUsersGet = Depends(get_current_privileged_user),
 ):
     return await DealsService.list_with_relations(data, user)
 
