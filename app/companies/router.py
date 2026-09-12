@@ -14,9 +14,9 @@ router = APIRouter(
 )
 
 
-@router.get("/fns/{inn}", summary="Получить компанию по ИНН из ФНС")
+@router.get("/fns/{inn}", summary="Получить компанию по ИНН из KontragentPro")
 async def get_company_info(inn: int):
-    return await CompaniesService.fetch_from_fns(inn)
+    return await CompaniesService.fetch_by_inn(inn)
 
 
 @router.get("/{id}", response_model=SCompanies, summary="Получить компанию по ID")

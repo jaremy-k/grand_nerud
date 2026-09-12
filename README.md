@@ -60,7 +60,7 @@ curl http://localhost:5003/materials \
 |------------|----------|
 | `SECRET_KEY` | Секрет для JWT |
 | `MONGO_*` | Подключение к MongoDB |
-| `API_FNS_*` | API ФНС для поиска компаний по ИНН |
+| `API_KONTRAGENTPRO_*` | API KontragentPro для поиска компаний по ИНН |
 | `S3_*` | Опционально, для файлового хранилища |
 | `CORS_ORIGINS` | `*` или список через запятую |
 | `ALLOW_REGISTRATION` | Публичная регистрация (`true`/`false`) |
@@ -71,7 +71,7 @@ curl http://localhost:5003/materials \
 app/
 ├── core/           # общие утилиты, pagination, entity services
 ├── repositories/   # MongoRepository — доступ к данным
-├── integrations/   # ФНС, S3
+├── integrations/   # KontragentPro, S3
 ├── deals/          # сделки (ядро)
 ├── companies/      # контрагенты
 ├── materials/      # материалы

@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     S3_ACCESS_KEY: str | None = None
     S3_SECRET_KEY: str | None = None
 
-    API_FNS_URL: str
-    API_FNS_KEY: str
+    API_KONTRAGENTPRO_URL: str = "https://kontragentpro.ru/api/v2"
+    API_KONTRAGENTPRO_KEY: str = ""
 
     CORS_ORIGINS: str = "*"
     ALLOW_REGISTRATION: bool = True

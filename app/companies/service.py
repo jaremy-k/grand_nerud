@@ -7,7 +7,7 @@ from app.companies.shemas import SCompanies, SCompaniesAdd
 from app.core.base_entity_service import BaseEntityService
 from app.deals.repository import deals_repository
 from app.exceptions import ConflictError, ExternalServiceError, InternalError, NotFoundError
-from app.integrations import get_fns_client
+from app.integrations import get_kontragentpro_client
 from app.integrations.exceptions import IntegrationError
 
 
@@ -41,9 +41,9 @@ class CompaniesService(BaseEntityService):
             return None
 
     @classmethod
-    async def fetch_from_fns(cls, inn: int) -> dict:
+    async def fetch_by_inn(cls, inn: int) -> dict:
         try:
-            return await get_fns_client().get_company_by_inn(inn)
+            return await get_kontragentpro_client().get_company_by_inn(inn)
         except IntegrationError as e:
             raise ExternalServiceError(e.message) from e
 
