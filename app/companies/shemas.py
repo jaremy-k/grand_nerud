@@ -2,10 +2,18 @@ from datetime import datetime
 from typing import List, Literal
 
 from bson import ObjectId
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from pydantic_settings import SettingsConfigDict
 
 CompanyRole = Literal["provider", "customer"]
+
+
+class SCompanyContactPerson(BaseModel):
+    name: str = Field(min_length=1, max_length=150)
+    position: str | None = Field(None, max_length=150)
+    phone: str | None = Field(None, max_length=50)
+    email: EmailStr | None = None
+    comment: str | None = Field(None, max_length=500)
 
 
 class SCompanies(BaseModel):
@@ -15,6 +23,7 @@ class SCompanies(BaseModel):
     inn: str | int | None = None
     kpp: str | int | None = None
     contacts: List[dict] | None = None
+    contactPersons: list[SCompanyContactPerson] | None = None
     comment: str | None = None
     roles: list[CompanyRole] | None = None
     type: str | None = None
@@ -37,6 +46,7 @@ class SCompaniesAdd(BaseModel):
     inn: int | str | None = None
     kpp: int | str | None = None
     contacts: List[dict] | None = None
+    contactPersons: list[SCompanyContactPerson] | None = None
     comment: str | None = None
     roles: list[CompanyRole] | None = None
     type: str | None = None
