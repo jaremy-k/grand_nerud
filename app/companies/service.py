@@ -3,11 +3,13 @@ import re
 from bson import ObjectId
 
 from app.companies.repository import companies_repository
+from app.companies.pipelines import build_company_details_pipeline
 from app.companies.shemas import CompanyRole, SCompanies, SCompaniesAdd
 from app.company_materials.repository import company_materials_repository
 from app.core.base_entity_service import BaseEntityService
+from app.core.mongo_utils import serialize_mongo_docs
 from app.deals.repository import deals_repository
-from app.exceptions import ConflictError, ExternalServiceError, InternalError, NotFoundError
+from app.exceptions import ConflictError, ExternalServiceError, InternalError, NotFoundError, ValidationError
 from app.integrations import get_kontragentpro_client
 from app.integrations.exceptions import IntegrationError
 
@@ -23,12 +25,21 @@ class CompaniesService(BaseEntityService):
             filters: SCompanies,
             include_deleted: bool = False,
             role: CompanyRole | None = None,
+            include_details: bool = False,
+            user_id: str | None = None,
+            is_privileged: bool = False,
     ) -> list[dict]:
         query = filters.model_dump(exclude_none=True)
         if role:
             query["roles"] = role
         if not include_deleted:
             query["deletedAt"] = None
+        if include_details:
+            if role is None:
+                raise ValidationError("Для расширенного списка необходимо указать role")
+            deal_user_id = None if is_privileged else ObjectId(user_id)
+            pipeline = build_company_details_pipeline(query, role, deal_user_id)
+            return serialize_mongo_docs(await cls.repository.aggregate(pipeline))
         return await cls.repository.find_many(**query)
 
     @classmethod

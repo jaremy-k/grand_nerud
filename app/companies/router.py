@@ -3,9 +3,10 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 
 from app.companies.service import CompaniesService
-from app.companies.shemas import CompanyRole, SCompanies, SCompaniesAdd
+from app.companies.shemas import CompanyRole, SCompanies, SCompaniesAdd, SCompaniesWithDetails
 from app.logger import logger
 from app.users.dependencies import get_current_user
+from app.users.shemas import SUsersGet
 
 router = APIRouter(
     prefix="/companies",
@@ -24,16 +25,26 @@ async def get_company_by_id(id: str) -> SCompanies:
     return await CompaniesService.get_by_id(id)
 
 
-@router.get("", response_model=list[SCompanies], summary="Получить список компаний")
+@router.get(
+    "",
+    response_model=list[SCompaniesWithDetails],
+    response_model_exclude_none=True,
+    summary="Получить список компаний",
+)
 async def get_companies(
         data: SCompanies = Depends(),
         role: CompanyRole | None = Query(None, description="Роль компании в сделках"),
+        includeDetails: bool = Query(False, description="Добавить адреса, материалы или закупки"),
         includeDeleted: bool = Query(False),
-) -> list[SCompanies]:
+        user: SUsersGet = Depends(get_current_user),
+) -> list[SCompaniesWithDetails]:
     return await CompaniesService.list_companies(
         data,
         include_deleted=includeDeleted,
         role=role,
+        include_details=includeDetails,
+        user_id=user.id,
+        is_privileged=user.is_privileged,
     )
 
 

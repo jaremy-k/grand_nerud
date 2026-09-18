@@ -40,6 +40,12 @@ class SCompanies(BaseModel):
     )
 
 
+class SCompaniesWithDetails(SCompanies):
+    addresses: list[dict] | None = None
+    materialsWithPrices: list[dict] | None = None
+    purchases: list[dict] | None = None
+
+
 class SCompaniesAdd(BaseModel):
     name: str | None = None
     abbreviatedName: str | None = None
