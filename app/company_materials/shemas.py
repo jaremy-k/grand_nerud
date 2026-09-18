@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from bson import ObjectId
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -7,21 +6,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.base_schemas import PyObjectId
 
 
-class _CompanyMaterialIdsMixin:
-    @field_validator("companyId", "materialId", mode="before", check_fields=False)
-    @classmethod
-    def convert_str_to_objectid(cls, value: Optional[str]) -> Optional[ObjectId]:
-        if value is None or isinstance(value, ObjectId):
-            return value
-        try:
-            return ObjectId(value)
-        except Exception as exc:
-            raise ValueError(f"Invalid ObjectId format: {value}") from exc
-
-
-class SCompanyMaterialInput(_CompanyMaterialIdsMixin, BaseModel):
-    companyId: Optional[PyObjectId] = None
-    materialId: Optional[PyObjectId] = None
+class SCompanyMaterialInput(BaseModel):
+    companyId: PyObjectId | None = None
+    materialId: PyObjectId | None = None
     price: float | None = Field(None, ge=0)
     unit: str | None = Field(None, min_length=1, max_length=50)
     comment: str | None = None
