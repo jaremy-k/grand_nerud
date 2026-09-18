@@ -19,6 +19,7 @@ from app.migrations.run import run_migrations
 from app.users.router import router as router_users
 from app.materials.router import router as router_materials
 from app.companies.router import router as router_companies
+from app.company_materials.router import router as router_company_materials
 from app.deals.router import router as router_deals
 from app.services.router import router as router_services
 from app.stages.router import router as router_stages
@@ -85,6 +86,7 @@ async def app_error_handler(_request: Request, exc: AppError):
 app.include_router(router_users)
 app.include_router(router_materials)
 app.include_router(router_companies)
+app.include_router(router_company_materials)
 app.include_router(router_deals)
 app.include_router(router_calculator_config)
 app.include_router(router_calculation_rules)

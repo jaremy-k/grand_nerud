@@ -1,6 +1,7 @@
 from bson import ObjectId
 
 from app.core.named_entity_service import NamedEntityService
+from app.company_materials.repository import company_materials_repository
 from app.deals.repository import deals_repository
 from app.materials.repository import materials_repository
 from app.materials.shemas import SMaterials, SMaterialsAdd
@@ -19,5 +20,10 @@ class MaterialsService(NamedEntityService):
 
     @classmethod
     async def has_dependencies(cls, material_id: str) -> bool:
-        count = await deals_repository.count({"materialId": ObjectId(material_id), "deletedAt": None})
-        return count > 0
+        oid = ObjectId(material_id)
+        deals_count = await deals_repository.count({"materialId": oid, "deletedAt": None})
+        companies_count = await company_materials_repository.count({
+            "materialId": oid,
+            "deletedAt": None,
+        })
+        return deals_count > 0 or companies_count > 0

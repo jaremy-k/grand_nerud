@@ -7,6 +7,7 @@ def parse_company_data(json_data: dict[str, Any] | None) -> dict[str, Any]:
         "name": "",
         "abbreviatedName": "",
         "inn": 0,
+        "kpp": "",
         "contacts": [],
         "type": "Юридическое лицо",
         "deleted_at": None,
@@ -26,6 +27,8 @@ def parse_company_data(json_data: dict[str, Any] | None) -> dict[str, Any]:
         result["inn"] = int(inn_str) if inn_str else 0
     except (ValueError, TypeError):
         result["inn"] = 0
+
+    result["kpp"] = str(json_data.get("kpp") or "").strip()
 
     contacts: list[dict] = []
     address = json_data.get("address")

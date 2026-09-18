@@ -11,7 +11,9 @@ class SCompanies(BaseModel):
     name: str | None = None
     abbreviatedName: str | None = None
     inn: str | int | None = None
+    kpp: str | int | None = None
     contacts: List[dict] | None = None
+    comment: str | None = None
     type: str | None = None
     deletedAt: datetime | None = None
 
@@ -30,7 +32,9 @@ class SCompaniesAdd(BaseModel):
     name: str | None = None
     abbreviatedName: str | None = None
     inn: int | str | None = None
+    kpp: int | str | None = None
     contacts: List[dict] | None = None
+    comment: str | None = None
     type: str | None = None
 
     model_config = SettingsConfigDict(

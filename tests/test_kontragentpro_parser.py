@@ -12,6 +12,7 @@ def test_parse_company_data_empty():
 def test_parse_company_card():
     result = parse_company_data({
         "inn": "7707083893",
+        "kpp": "773601001",
         "name": {
             "short": "ПАО СБЕРБАНК",
             "full": 'ПУБЛИЧНОЕ АКЦИОНЕРНОЕ ОБЩЕСТВО "СБЕРБАНК РОССИИ"',
@@ -23,6 +24,7 @@ def test_parse_company_card():
     })
 
     assert result["inn"] == 7707083893
+    assert result["kpp"] == "773601001"
     assert result["name"] == 'ПУБЛИЧНОЕ АКЦИОНЕРНОЕ ОБЩЕСТВО "СБЕРБАНК РОССИИ"'
     assert result["abbreviatedName"] == "ПАО СБЕРБАНК"
     assert result["type"] == "Юридическое лицо"

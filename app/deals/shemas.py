@@ -180,6 +180,7 @@ class SDeals(BaseModel):
 class SDealsWithRelations(SDeals):
     service: Optional[dict] = None
     customer: Optional[dict] = None
+    provider: Optional[dict] = None
     stage: Optional[dict] = None
     material: Optional[dict] = None
     shipping_address: Optional[dict] = None

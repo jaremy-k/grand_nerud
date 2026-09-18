@@ -18,6 +18,12 @@ def get_deal_relation_lookups() -> List[Dict]:
             "as": "customer",
         }},
         {"$lookup": {
+            "from": "companies",
+            "localField": "providerId",
+            "foreignField": "_id",
+            "as": "provider",
+        }},
+        {"$lookup": {
             "from": "stages",
             "localField": "stageId",
             "foreignField": "_id",
@@ -50,6 +56,7 @@ def get_deal_relation_lookups() -> List[Dict]:
         {"$addFields": {
             "service": {"$arrayElemAt": ["$service", 0]},
             "customer": {"$arrayElemAt": ["$customer", 0]},
+            "provider": {"$arrayElemAt": ["$provider", 0]},
             "stage": {"$arrayElemAt": ["$stage", 0]},
             "material": {"$arrayElemAt": ["$material", 0]},
             "shipping_address": {"$arrayElemAt": ["$shipping_address", 0]},

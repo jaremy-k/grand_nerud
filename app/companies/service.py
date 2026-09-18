@@ -4,6 +4,7 @@ from bson import ObjectId
 
 from app.companies.repository import companies_repository
 from app.companies.shemas import SCompanies, SCompaniesAdd
+from app.company_materials.repository import company_materials_repository
 from app.core.base_entity_service import BaseEntityService
 from app.deals.repository import deals_repository
 from app.exceptions import ConflictError, ExternalServiceError, InternalError, NotFoundError
@@ -88,8 +89,12 @@ class CompaniesService(BaseEntityService):
     @classmethod
     async def has_dependencies(cls, company_id: str) -> bool:
         oid = ObjectId(company_id)
-        count = await deals_repository.count({
+        deals_count = await deals_repository.count({
             "$or": [{"customerId": oid}, {"providerId": oid}],
             "deletedAt": None,
         })
-        return count > 0
+        materials_count = await company_materials_repository.count({
+            "companyId": oid,
+            "deletedAt": None,
+        })
+        return deals_count > 0 or materials_count > 0

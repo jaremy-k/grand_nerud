@@ -14,6 +14,7 @@ MIGRATIONS_COLLECTION = database_mongo["migrations"]
 STAGES_COLLECTION = database_mongo["stages"]
 MATERIALS_COLLECTION = database_mongo["materials"]
 DEALS_COLLECTION = database_mongo["deals"]
+COMPANY_MATERIALS_COLLECTION = database_mongo["company_materials"]
 
 DEFAULT_STAGES = [
     ("Согласование", 0),
@@ -281,6 +282,24 @@ async def migrate_deals_strip_computed() -> None:
     await _mark_applied(migration_id)
 
 
+async def migrate_company_materials_indexes() -> None:
+    migration_id = "company_materials_indexes_v1"
+    if await _is_applied(migration_id):
+        return
+
+    await COMPANY_MATERIALS_COLLECTION.create_index([
+        ("companyId", 1),
+        ("materialId", 1),
+        ("deletedAt", 1),
+    ])
+    await COMPANY_MATERIALS_COLLECTION.create_index([
+        ("materialId", 1),
+        ("deletedAt", 1),
+    ])
+    logger.info("Migration: company materials indexes created")
+    await _mark_applied(migration_id)
+
+
 async def run_migrations() -> None:
     await migrate_stages_dedupe()
     await migrate_calculator_config()
@@ -290,3 +309,4 @@ async def run_migrations() -> None:
     await migrate_calculation_rules()
     await migrate_calculation_rules_schema()
     await migrate_deals_strip_computed()
+    await migrate_company_materials_indexes()
