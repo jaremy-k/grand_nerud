@@ -3,7 +3,7 @@ import re
 from bson import ObjectId
 
 from app.companies.repository import companies_repository
-from app.companies.shemas import SCompanies, SCompaniesAdd
+from app.companies.shemas import CompanyRole, SCompanies, SCompaniesAdd
 from app.company_materials.repository import company_materials_repository
 from app.core.base_entity_service import BaseEntityService
 from app.deals.repository import deals_repository
@@ -18,8 +18,15 @@ class CompaniesService(BaseEntityService):
     conflict_detail = "Невозможно удалить компанию — имеются связанные объекты"
 
     @classmethod
-    async def list_companies(cls, filters: SCompanies, include_deleted: bool = False) -> list[dict]:
+    async def list_companies(
+            cls,
+            filters: SCompanies,
+            include_deleted: bool = False,
+            role: CompanyRole | None = None,
+    ) -> list[dict]:
         query = filters.model_dump(exclude_none=True)
+        if role:
+            query["roles"] = role
         if not include_deleted:
             query["deletedAt"] = None
         return await cls.repository.find_many(**query)

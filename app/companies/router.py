@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 
 from app.companies.service import CompaniesService
-from app.companies.shemas import SCompanies, SCompaniesAdd
+from app.companies.shemas import CompanyRole, SCompanies, SCompaniesAdd
 from app.logger import logger
 from app.users.dependencies import get_current_user
 
@@ -27,9 +27,14 @@ async def get_company_by_id(id: str) -> SCompanies:
 @router.get("", response_model=list[SCompanies], summary="Получить список компаний")
 async def get_companies(
         data: SCompanies = Depends(),
+        role: CompanyRole | None = Query(None, description="Роль компании в сделках"),
         includeDeleted: bool = Query(False),
 ) -> list[SCompanies]:
-    return await CompaniesService.list_companies(data, include_deleted=includeDeleted)
+    return await CompaniesService.list_companies(
+        data,
+        include_deleted=includeDeleted,
+        role=role,
+    )
 
 
 @router.post(

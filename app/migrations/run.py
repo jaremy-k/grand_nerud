@@ -15,6 +15,7 @@ STAGES_COLLECTION = database_mongo["stages"]
 MATERIALS_COLLECTION = database_mongo["materials"]
 DEALS_COLLECTION = database_mongo["deals"]
 COMPANY_MATERIALS_COLLECTION = database_mongo["company_materials"]
+COMPANIES_COLLECTION = database_mongo["companies"]
 
 DEFAULT_STAGES = [
     ("Согласование", 0),
@@ -300,6 +301,44 @@ async def migrate_company_materials_indexes() -> None:
     await _mark_applied(migration_id)
 
 
+async def migrate_company_roles() -> None:
+    migration_id = "company_roles_v1"
+    if await _is_applied(migration_id):
+        return
+
+    provider_ids = await DEALS_COLLECTION.distinct(
+        "providerId",
+        {"providerId": {"$ne": None}},
+    )
+    customer_ids = await DEALS_COLLECTION.distinct(
+        "customerId",
+        {"customerId": {"$ne": None}},
+    )
+
+    providers_updated = 0
+    customers_updated = 0
+    if provider_ids:
+        result = await COMPANIES_COLLECTION.update_many(
+            {"_id": {"$in": provider_ids}},
+            {"$addToSet": {"roles": "provider"}},
+        )
+        providers_updated = result.modified_count
+    if customer_ids:
+        result = await COMPANIES_COLLECTION.update_many(
+            {"_id": {"$in": customer_ids}},
+            {"$addToSet": {"roles": "customer"}},
+        )
+        customers_updated = result.modified_count
+
+    await COMPANIES_COLLECTION.create_index([("roles", 1), ("deletedAt", 1)])
+    logger.info(
+        "Migration: company roles populated (providers=%s, customers=%s)",
+        providers_updated,
+        customers_updated,
+    )
+    await _mark_applied(migration_id)
+
+
 async def run_migrations() -> None:
     await migrate_stages_dedupe()
     await migrate_calculator_config()
@@ -310,3 +349,4 @@ async def run_migrations() -> None:
     await migrate_calculation_rules_schema()
     await migrate_deals_strip_computed()
     await migrate_company_materials_indexes()
+    await migrate_company_roles()
