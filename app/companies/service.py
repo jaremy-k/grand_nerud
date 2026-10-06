@@ -1,7 +1,9 @@
 import re
 
 from bson import ObjectId
+from pydantic import ValidationError as PydanticValidationError
 
+from app.companies.excel_import import CompanyExcelFormatError, parse_companies_excel
 from app.companies.repository import companies_repository
 from app.companies.pipelines import build_company_details_pipeline
 from app.companies.shemas import CompanyRole, SCompanies, SCompaniesAdd
@@ -82,6 +84,114 @@ class CompaniesService(BaseEntityService):
         if not result:
             raise InternalError("Не удалось создать компанию")
         return result
+
+    @staticmethod
+    def _merge_unique(existing: list | None, incoming: list | None) -> list:
+        result = list(existing or [])
+        seen = {str(value).casefold() for value in result}
+        for value in incoming or []:
+            key = str(value).casefold()
+            if key not in seen:
+                seen.add(key)
+                result.append(value)
+        return result
+
+    @classmethod
+    def _merge_contact_persons(cls, existing: list | None, incoming: list | None) -> list:
+        result = [dict(contact) for contact in (existing or []) if isinstance(contact, dict)]
+        for contact in incoming or []:
+            contact = dict(contact)
+            contact_inn = str(contact.get("inn") or "").strip()
+            contact_name = str(contact.get("name") or "").strip().casefold()
+            match = next((
+                item for item in result
+                if (
+                    contact_inn
+                    and str(item.get("inn") or "").strip() == contact_inn
+                ) or (
+                    str(item.get("name") or "").strip().casefold() == contact_name
+                )
+            ), None)
+            if match is None:
+                result.append(contact)
+                continue
+            for field in ("name", "inn", "position", "isPrimary", "comment"):
+                if contact.get(field) not in (None, ""):
+                    match[field] = contact[field]
+            match["phones"] = cls._merge_unique(match.get("phones"), contact.get("phones"))
+            match["emails"] = cls._merge_unique(match.get("emails"), contact.get("emails"))
+        return result
+
+    @classmethod
+    def _build_import_update(cls, existing: dict, incoming: dict) -> dict:
+        update: dict = {}
+        for field in ("name", "source"):
+            if incoming.get(field) not in (None, ""):
+                update[field] = incoming[field]
+        for field in ("phones", "emails", "websites", "segments", "roles"):
+            update[field] = cls._merge_unique(existing.get(field), incoming.get(field))
+        update["contactPersons"] = cls._merge_contact_persons(
+            existing.get("contactPersons"),
+            incoming.get("contactPersons"),
+        )
+        return {
+            field: value
+            for field, value in update.items()
+            if existing.get(field) != value
+        }
+
+    @staticmethod
+    def _pydantic_error_detail(exc: PydanticValidationError) -> str:
+        errors = []
+        for error in exc.errors():
+            location = ".".join(str(part) for part in error.get("loc", []))
+            errors.append(f"{location}: {error['msg']}" if location else error["msg"])
+        return "; ".join(errors)
+
+    @classmethod
+    async def import_excel(cls, content: bytes, role: CompanyRole | None = None) -> dict:
+        try:
+            rows, errors = parse_companies_excel(content, role=role)
+        except CompanyExcelFormatError as exc:
+            raise ValidationError(str(exc)) from exc
+
+        total_rows = len(rows) + len(errors)
+        created = 0
+        updated = 0
+        skipped = 0
+        for row in rows:
+            try:
+                incoming = SCompaniesAdd.model_validate(row.data)
+            except PydanticValidationError as exc:
+                errors.append({
+                    "row": row.row_number,
+                    "detail": cls._pydantic_error_detail(exc),
+                })
+                continue
+
+            existing = await cls.find_by_inn(incoming.inn)
+            if not existing:
+                await cls.create(incoming)
+                created += 1
+                continue
+
+            update_data = cls._build_import_update(
+                existing,
+                incoming.model_dump(exclude_none=True, mode="json"),
+            )
+            if not update_data:
+                skipped += 1
+                continue
+            await cls.update(str(existing["_id"]), SCompaniesAdd.model_validate(update_data))
+            updated += 1
+
+        return {
+            "totalRows": total_rows,
+            "created": created,
+            "updated": updated,
+            "skipped": skipped,
+            "errors": errors,
+        }
 
     @classmethod
     async def update(cls, company_id: str, data: SCompaniesAdd) -> dict:

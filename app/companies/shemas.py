@@ -10,9 +10,13 @@ CompanyRole = Literal["provider", "customer"]
 
 class SCompanyContactPerson(BaseModel):
     name: str = Field(min_length=1, max_length=150)
+    inn: str | int | None = None
     position: str | None = Field(None, max_length=150)
     phone: str | None = Field(None, max_length=50)
     email: EmailStr | None = None
+    phones: list[str] | None = None
+    emails: list[EmailStr] | None = None
+    isPrimary: bool = False
     comment: str | None = Field(None, max_length=500)
 
 
@@ -24,6 +28,11 @@ class SCompanies(BaseModel):
     kpp: str | int | None = None
     contacts: List[dict] | None = None
     contactPersons: list[SCompanyContactPerson] | None = None
+    phones: list[str] | None = None
+    emails: list[EmailStr] | None = None
+    websites: list[str] | None = None
+    source: str | None = None
+    segments: list[str] | None = None
     comment: str | None = None
     roles: list[CompanyRole] | None = None
     type: str | None = None
@@ -53,6 +62,11 @@ class SCompaniesAdd(BaseModel):
     kpp: int | str | None = None
     contacts: List[dict] | None = None
     contactPersons: list[SCompanyContactPerson] | None = None
+    phones: list[str] | None = None
+    emails: list[EmailStr] | None = None
+    websites: list[str] | None = None
+    source: str | None = None
+    segments: list[str] | None = None
     comment: str | None = None
     roles: list[CompanyRole] | None = None
     type: str | None = None
@@ -62,3 +76,16 @@ class SCompaniesAdd(BaseModel):
         from_attributes=True,
         populate_by_name=True
     )
+
+
+class SCompanyImportError(BaseModel):
+    row: int
+    detail: str
+
+
+class SCompanyImportResult(BaseModel):
+    totalRows: int
+    created: int
+    updated: int
+    skipped: int
+    errors: list[SCompanyImportError]

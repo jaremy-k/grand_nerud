@@ -1,9 +1,16 @@
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, UploadFile, status
 
 from app.companies.service import CompaniesService
-from app.companies.shemas import CompanyRole, SCompanies, SCompaniesAdd, SCompaniesWithDetails
+from app.companies.shemas import (
+    CompanyRole,
+    SCompanies,
+    SCompaniesAdd,
+    SCompanyImportResult,
+    SCompaniesWithDetails,
+)
+from app.exceptions import ValidationError
 from app.logger import logger
 from app.users.dependencies import get_current_user
 from app.users.shemas import SUsersGet
@@ -14,10 +21,32 @@ router = APIRouter(
     dependencies=[Depends(get_current_user)],
 )
 
+MAX_EXCEL_FILE_SIZE = 10 * 1024 * 1024
+
 
 @router.get("/fns/{inn}", summary="Получить компанию по ИНН из KontragentPro")
 async def get_company_info(inn: int):
     return await CompaniesService.fetch_by_inn(inn)
+
+
+@router.post("/import", response_model=SCompanyImportResult, summary="Импортировать компании из Excel")
+async def import_companies(
+        file: UploadFile = File(...),
+        role: CompanyRole | None = Query(None, description="Назначить роль всем компаниям из файла"),
+):
+    filename = file.filename or ""
+    if not filename.lower().endswith(".xlsx"):
+        raise ValidationError("Поддерживаются только файлы .xlsx")
+
+    try:
+        content = await file.read(MAX_EXCEL_FILE_SIZE + 1)
+    finally:
+        await file.close()
+    if not content:
+        raise ValidationError("Excel-файл пуст")
+    if len(content) > MAX_EXCEL_FILE_SIZE:
+        raise ValidationError("Размер Excel-файла не должен превышать 10 МБ")
+    return await CompaniesService.import_excel(content, role=role)
 
 
 @router.get("/{id}", response_model=SCompanies, summary="Получить компанию по ID")
