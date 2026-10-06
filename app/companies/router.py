@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, UploadFile, status
 
 from app.companies.service import CompaniesService
+from app.adresses.shemas import MoscowAdministrativeDistrict
 from app.companies.shemas import (
     CompanyRole,
     SCompanies,
@@ -65,6 +66,12 @@ async def get_companies(
         role: CompanyRole | None = Query(None, description="Роль компании в сделках"),
         includeDetails: bool = Query(False, description="Добавить адреса, материалы или закупки"),
         includeDeleted: bool = Query(False),
+        city: str | None = Query(None, description="Город адреса компании"),
+        administrativeDistrict: MoscowAdministrativeDistrict | None = Query(
+            None,
+            description="Административный округ Москвы",
+        ),
+        district: str | None = Query(None, description="Район города"),
         user: SUsersGet = Depends(get_current_user),
 ) -> list[SCompaniesWithDetails]:
     return await CompaniesService.list_companies(
@@ -74,6 +81,9 @@ async def get_companies(
         include_details=includeDetails,
         user_id=user.id,
         is_privileged=user.is_privileged,
+        city=city,
+        administrative_district=administrativeDistrict,
+        district=district,
     )
 
 

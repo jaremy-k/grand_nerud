@@ -30,17 +30,32 @@ class CompaniesService(BaseEntityService):
             include_details: bool = False,
             user_id: str | None = None,
             is_privileged: bool = False,
+            city: str | None = None,
+            administrative_district: str | None = None,
+            district: str | None = None,
     ) -> list[dict]:
         query = filters.model_dump(exclude_none=True)
         if role:
             query["roles"] = role
         if not include_deleted:
             query["deletedAt"] = None
-        if include_details:
+        has_geo_filter = bool(city or administrative_district or district)
+        if include_details or has_geo_filter:
             if role is None:
-                raise ValidationError("Для расширенного списка необходимо указать role")
-            deal_user_id = None if is_privileged else ObjectId(user_id)
-            pipeline = build_company_details_pipeline(query, role, deal_user_id)
+                if include_details:
+                    raise ValidationError("Для расширенного списка необходимо указать role")
+                deal_user_id = None
+            else:
+                deal_user_id = None if is_privileged else ObjectId(user_id)
+            pipeline = build_company_details_pipeline(
+                query,
+                role,
+                deal_user_id,
+                city=city,
+                administrative_district=administrative_district,
+                district=district,
+                include_details=include_details,
+            )
             return serialize_mongo_docs(await cls.repository.aggregate(pipeline))
         return await cls.repository.find_many(**query)
 

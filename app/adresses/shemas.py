@@ -1,8 +1,13 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from bson import ObjectId
 from pydantic import BaseModel, Field, field_validator
+
+MoscowAdministrativeDistrict = Literal[
+    "ЦАО", "САО", "СВАО", "ВАО", "ЮВАО", "ЮАО",
+    "ЮЗАО", "ЗАО", "СЗАО", "ЗелАО", "ТиНАО",
+]
 
 
 class SAdresses(BaseModel):
@@ -10,6 +15,9 @@ class SAdresses(BaseModel):
     companyId: str | None = None
     coordinates: list | None = None
     cityId: str | None = None
+    city: str | None = None
+    administrativeDistrict: MoscowAdministrativeDistrict | None = None
+    district: str | None = None
     adressDetail: dict | None = None
     typeAdress: str | None = None
     deletedAt: datetime | None = None
@@ -28,6 +36,9 @@ class SAdressesAdd(BaseModel):
     companyId: str | None = None
     coordinates: list | None = None
     cityId: str | None = None
+    city: str | None = None
+    administrativeDistrict: MoscowAdministrativeDistrict | None = None
+    district: str | None = None
     adressDetail: dict | None = None
     typeAdress: str | None = None
 

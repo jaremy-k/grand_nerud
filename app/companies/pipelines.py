@@ -3,7 +3,25 @@ from bson import ObjectId
 from app.companies.shemas import CompanyRole
 
 
-def _addresses_lookup() -> dict:
+def _addresses_lookup(
+        city: str | None = None,
+        administrative_district: str | None = None,
+        district: str | None = None,
+) -> dict:
+    conditions = [
+        {"$eq": [{"$ifNull": ["$deletedAt", None]}, None]},
+        {"$or": [
+            {"$eq": ["$companyId", "$$companyObjectId"]},
+            {"$eq": ["$companyId", "$$companyStringId"]},
+        ]},
+    ]
+    if city:
+        conditions.append({"$eq": ["$city", city]})
+    if administrative_district:
+        conditions.append({"$eq": ["$administrativeDistrict", administrative_district]})
+    if district:
+        conditions.append({"$eq": ["$district", district]})
+
     return {"$lookup": {
         "from": "adresses",
         "let": {
@@ -11,19 +29,13 @@ def _addresses_lookup() -> dict:
             "companyStringId": {"$toString": "$_id"},
         },
         "pipeline": [
-            {"$match": {"$expr": {"$and": [
-                {"$eq": [{"$ifNull": ["$deletedAt", None]}, None]},
-                {"$or": [
-                    {"$eq": ["$companyId", "$$companyObjectId"]},
-                    {"$eq": ["$companyId", "$$companyStringId"]},
-                ]},
-            ]}}},
+            {"$match": {"$expr": {"$and": conditions}}},
         ],
         "as": "addresses",
     }}
 
 
-def _provider_materials_lookup() -> dict:
+def _company_materials_lookup() -> dict:
     return {"$lookup": {
         "from": "company_materials",
         "let": {"companyId": "$_id"},
@@ -103,16 +115,22 @@ def _customer_purchases_lookup(user_id: ObjectId | None) -> dict:
 
 def build_company_details_pipeline(
         match_filter: dict,
-        role: CompanyRole,
+        role: CompanyRole | None,
         deal_user_id: ObjectId | None = None,
+        city: str | None = None,
+        administrative_district: str | None = None,
+        district: str | None = None,
+        include_details: bool = True,
 ) -> list[dict]:
     pipeline = [
         {"$match": match_filter},
-        _addresses_lookup(),
+        _addresses_lookup(city, administrative_district, district),
     ]
-    if role == "provider":
-        pipeline.append(_provider_materials_lookup())
-    else:
-        pipeline.append(_customer_purchases_lookup(deal_user_id))
+    if city or administrative_district or district:
+        pipeline.append({"$match": {"addresses.0": {"$exists": True}}})
+    if include_details:
+        pipeline.append(_company_materials_lookup())
+        if role == "customer":
+            pipeline.append(_customer_purchases_lookup(deal_user_id))
     pipeline.append({"$sort": {"name": 1}})
     return pipeline

@@ -22,6 +22,7 @@ def test_customer_details_include_own_purchases_for_regular_user():
     match_expression = purchases["pipeline"][0]["$match"]["$expr"]
 
     assert _lookup_by_alias(pipeline, "addresses")
+    assert _lookup_by_alias(pipeline, "materialsWithPrices")
     assert {"$eq": ["$userId", user_id]} in match_expression["$and"]
     projection = next(stage["$project"] for stage in purchases["pipeline"] if "$project" in stage)
     assert projection["price"] == "$amountSalesUnit"
@@ -33,3 +34,18 @@ def test_customer_details_include_all_purchases_for_privileged_user():
     conditions = purchases["pipeline"][0]["$match"]["$expr"]["$and"]
 
     assert not any(condition.get("$eq", [None])[0] == "$userId" for condition in conditions)
+
+
+def test_company_details_filter_addresses_by_moscow_district():
+    pipeline = build_company_details_pipeline(
+        {"roles": "provider"},
+        "provider",
+        city="Москва",
+        administrative_district="ЮАО",
+    )
+    addresses = _lookup_by_alias(pipeline, "addresses")
+    conditions = addresses["pipeline"][0]["$match"]["$expr"]["$and"]
+
+    assert {"$eq": ["$city", "Москва"]} in conditions
+    assert {"$eq": ["$administrativeDistrict", "ЮАО"]} in conditions
+    assert {"$match": {"addresses.0": {"$exists": True}}} in pipeline
