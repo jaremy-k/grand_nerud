@@ -1,5 +1,6 @@
 import re
 from datetime import datetime, timezone
+from hashlib import sha256
 
 from bson import ObjectId
 
@@ -371,3 +372,38 @@ async def run_migrations() -> None:
     await migrate_company_materials_indexes()
     await migrate_company_roles()
     await migrate_address_geography_indexes()
+    await migrate_leads_and_tasks()
+
+
+async def migrate_leads_and_tasks() -> None:
+    migration_id = "leads_tasks_v1"
+    if await _is_applied(migration_id):
+        return
+
+    stages = database_mongo["lead_stages"]
+    defaults = [
+        ("new", "Новый"), ("in_progress", "В работе"),
+        ("qualified", "Квалифицирован"), ("deferred", "Отложен"),
+        ("unqualified", "Нецелевой"), ("converted", "Переведён в сделку"),
+    ]
+    for order, (kind, name) in enumerate(defaults):
+        await stages.update_one(
+            {"_id": ObjectId(sha256(f"lead-stage:{kind}".encode()).digest()[:12])},
+            {"$setOnInsert": {"name": name, "kind": kind, "order": order, "deletedAt": None}},
+            upsert=True,
+        )
+    leads = database_mongo["leads"]
+    await leads.create_index([("ownerId", 1), ("deletedAt", 1), ("stageId", 1), ("createdAt", -1)])
+    await leads.create_index([("companyId", 1), ("deletedAt", 1)])
+    await leads.create_index("importKey", unique=True, partialFilterExpression={"importKey": {"$type": "string"}})
+    await database_mongo["tasks"].create_index([("ownerId", 1), ("status", 1), ("deletedAt", 1), ("dueAt", 1)])
+    await database_mongo["tasks"].create_index([("leadId", 1), ("deletedAt", 1)])
+    await database_mongo["tasks"].create_index([("companyId", 1), ("deletedAt", 1), ("dueAt", 1)])
+    await database_mongo["tasks"].create_index([("dealId", 1), ("deletedAt", 1), ("dueAt", 1)])
+    await database_mongo["lead_activities"].create_index([("leadId", 1), ("createdAt", -1)])
+    await DEALS_COLLECTION.create_index(
+        "sourceLeadId", unique=True,
+        partialFilterExpression={"sourceLeadId": {"$type": "objectId"}},
+    )
+    await _mark_applied(migration_id)
+    logger.info("Migration: lead stages, leads and tasks initialized")

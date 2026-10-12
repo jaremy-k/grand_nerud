@@ -88,4 +88,6 @@ class SCompanyImportResult(BaseModel):
     created: int
     updated: int
     skipped: int
+    leadsCreated: int = 0
+    leadsSkipped: int = 0
     errors: list[SCompanyImportError]

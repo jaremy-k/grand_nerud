@@ -6,6 +6,7 @@ from app.core.base_entity_service import BaseEntityService
 from app.core.object_id import parse_object_id
 from app.deals.repository import deals_repository
 from app.exceptions import InternalError, NotFoundError
+from app.leads.repository import leads_repository
 
 
 class AdressesService(BaseEntityService):
@@ -50,4 +51,5 @@ class AdressesService(BaseEntityService):
             "$or": [{"shippingAddressId": oid}, {"deliveryAddressId": oid}],
             "deletedAt": None,
         })
-        return count > 0
+        leads_count = await leads_repository.count({"objectAddressId": oid, "deletedAt": None})
+        return count > 0 or leads_count > 0

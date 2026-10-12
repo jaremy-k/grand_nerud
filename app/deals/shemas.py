@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from bson import ObjectId
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.base_schemas import BaseMongoModel, PyObjectId
 
@@ -114,6 +114,8 @@ class SDealsStageUpdate(_ObjectIdConverterMixin, BaseModel):
 
 
 class SDeals(BaseModel):
+    id: str | None = Field(None, alias="_id")
+    sourceLeadId: Optional[PyObjectId] = None
     createdAt: datetime | None = None
     userId: Optional[PyObjectId] | None = None
     serviceId: Optional[PyObjectId] | None = None
@@ -159,7 +161,7 @@ class SDeals(BaseModel):
     managerShare: float | None = None
 
     @field_validator(
-        "userId", "serviceId", "customerId", "providerId", "stageId", "materialId",
+        "id", "sourceLeadId", "userId", "serviceId", "customerId", "providerId", "stageId", "materialId",
         "shippingAddressId", "deliveryAddressId", "calculationRuleId",
         mode="before",
     )

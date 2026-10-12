@@ -5,6 +5,7 @@ from app.company_materials.repository import company_materials_repository
 from app.deals.repository import deals_repository
 from app.materials.repository import materials_repository
 from app.materials.shemas import SMaterials, SMaterialsAdd
+from app.leads.repository import leads_repository
 
 
 class MaterialsService(NamedEntityService):
@@ -26,4 +27,5 @@ class MaterialsService(NamedEntityService):
             "materialId": oid,
             "deletedAt": None,
         })
-        return deals_count > 0 or companies_count > 0
+        leads_count = await leads_repository.count({"materialIds": oid, "deletedAt": None})
+        return deals_count > 0 or companies_count > 0 or leads_count > 0

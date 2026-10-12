@@ -34,6 +34,8 @@ async def get_company_info(inn: int):
 async def import_companies(
         file: UploadFile = File(...),
         role: CompanyRole | None = Query(None, description="Назначить роль всем компаниям из файла"),
+        createLeads: bool = Query(False, description="Создать новые лиды для первичной обработки"),
+        user: SUsersGet = Depends(get_current_user),
 ):
     filename = file.filename or ""
     if not filename.lower().endswith(".xlsx"):
@@ -47,7 +49,7 @@ async def import_companies(
         raise ValidationError("Excel-файл пуст")
     if len(content) > MAX_EXCEL_FILE_SIZE:
         raise ValidationError("Размер Excel-файла не должен превышать 10 МБ")
-    return await CompaniesService.import_excel(content, role=role)
+    return await CompaniesService.import_excel(content, role=role, create_leads=createLeads, user=user)
 
 
 @router.get("/{id}", response_model=SCompanies, summary="Получить компанию по ID")

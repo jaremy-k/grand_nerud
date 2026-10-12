@@ -25,6 +25,9 @@ from app.services.router import router as router_services
 from app.stages.router import router as router_stages
 from app.vehicles.router import router as router_vehicles
 from app.adresses.router import router as router_adresses
+from app.lead_stages.router import router as router_lead_stages
+from app.leads.router import router as router_leads
+from app.tasks.router import router as router_tasks
 
 
 @asynccontextmanager
@@ -94,6 +97,9 @@ app.include_router(router_services)
 app.include_router(router_stages)
 app.include_router(router_vehicles)
 app.include_router(router_adresses)
+app.include_router(router_lead_stages)
+app.include_router(router_leads)
+app.include_router(router_tasks)
 
 
 @app.middleware("http")

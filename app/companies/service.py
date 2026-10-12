@@ -14,6 +14,9 @@ from app.deals.repository import deals_repository
 from app.exceptions import ConflictError, ExternalServiceError, InternalError, NotFoundError, ValidationError
 from app.integrations import get_kontragentpro_client
 from app.integrations.exceptions import IntegrationError
+from app.leads.repository import leads_repository
+from app.tasks.repository import tasks_repository
+from app.users.shemas import SUsersGet
 
 
 class CompaniesService(BaseEntityService):
@@ -164,16 +167,25 @@ class CompaniesService(BaseEntityService):
         return "; ".join(errors)
 
     @classmethod
-    async def import_excel(cls, content: bytes, role: CompanyRole | None = None) -> dict:
+    async def import_excel(cls, content: bytes, role: CompanyRole | None = None,
+                           create_leads: bool = False, user: SUsersGet | None = None) -> dict:
         try:
             rows, errors = parse_companies_excel(content, role=role)
         except CompanyExcelFormatError as exc:
             raise ValidationError(str(exc)) from exc
+        if create_leads:
+            from app.lead_stages.service import LeadStagesService
+            from app.leads.service import LeadsService
+            if user is None:
+                raise ValidationError("Для создания лидов необходим ответственный")
+            await LeadStagesService.get_by_kind("new")
 
         total_rows = len(rows) + len(errors)
         created = 0
         updated = 0
         skipped = 0
+        leads_created = 0
+        leads_skipped = 0
         for row in rows:
             try:
                 incoming = SCompaniesAdd.model_validate(row.data)
@@ -185,26 +197,36 @@ class CompaniesService(BaseEntityService):
                 continue
 
             existing = await cls.find_by_inn(incoming.inn)
+            if existing and existing.get("deletedAt") is not None:
+                errors.append({"row": row.row_number, "detail": "Компания с этим ИНН находится в архиве"})
+                continue
             if not existing:
-                await cls.create(incoming)
+                company = await cls.create(incoming)
                 created += 1
-                continue
-
-            update_data = cls._build_import_update(
-                existing,
-                incoming.model_dump(exclude_none=True, mode="json"),
-            )
-            if not update_data:
-                skipped += 1
-                continue
-            await cls.update(str(existing["_id"]), SCompaniesAdd.model_validate(update_data))
-            updated += 1
+            else:
+                update_data = cls._build_import_update(
+                    existing,
+                    incoming.model_dump(exclude_none=True, mode="json"),
+                )
+                if not update_data:
+                    skipped += 1
+                    company = existing
+                else:
+                    company = await cls.update(str(existing["_id"]), SCompaniesAdd.model_validate(update_data))
+                    updated += 1
+            if create_leads:
+                if await LeadsService.create_for_import(company, user):
+                    leads_created += 1
+                else:
+                    leads_skipped += 1
 
         return {
             "totalRows": total_rows,
             "created": created,
             "updated": updated,
             "skipped": skipped,
+            "leadsCreated": leads_created,
+            "leadsSkipped": leads_skipped,
             "errors": errors,
         }
 
@@ -240,4 +262,6 @@ class CompaniesService(BaseEntityService):
             "companyId": oid,
             "deletedAt": None,
         })
-        return deals_count > 0 or materials_count > 0
+        leads_count = await leads_repository.count({"companyId": oid, "deletedAt": None})
+        tasks_count = await tasks_repository.count({"companyId": oid, "status": "open", "deletedAt": None})
+        return any(count > 0 for count in (deals_count, materials_count, leads_count, tasks_count))

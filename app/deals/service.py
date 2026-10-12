@@ -197,7 +197,7 @@ class DealsService:
         )
 
     @classmethod
-    async def create(cls, data: SDealsInput, user: SUsersGet) -> dict:
+    async def prepare_creation(cls, data: SDealsInput, user: SUsersGet) -> dict:
         cls._validate_create(data)
         payload = cls._normalize_lists(data.model_dump(exclude_none=True))
         snapshots, rule_id, rule_version = await cls._compute_snapshots(payload, user)
@@ -209,10 +209,31 @@ class DealsService:
         }
         payload["userId"] = ObjectId(user.id)
         payload["createdAt"] = datetime.now()
+        return payload
+
+    @classmethod
+    async def create(cls, data: SDealsInput, user: SUsersGet, *,
+                     source_lead_id: ObjectId | None = None, deal_id: ObjectId | None = None,
+                     prepared: dict | None = None) -> dict:
+        payload = dict(prepared) if prepared is not None else await cls.prepare_creation(data, user)
+        if source_lead_id is not None:
+            payload["sourceLeadId"] = source_lead_id
+        if deal_id is not None:
+            payload["_id"] = deal_id
         result = await cls.repository.create(payload)
+        if not result and source_lead_id is not None:
+            result = await cls.repository.find_one(_id=deal_id, sourceLeadId=source_lead_id)
         if not result:
             raise InternalError("Не удалось создать сделку")
         return await cls._enrich_response(result, user)
+
+    @classmethod
+    async def create_from_lead(cls, data: SDealsInput, user: SUsersGet,
+                               lead_id: ObjectId, deal_id: ObjectId, prepared: dict | None = None) -> dict:
+        existing = await cls.repository.find_one(_id=deal_id, sourceLeadId=lead_id)
+        if existing:
+            return await cls._enrich_response(existing, user)
+        return await cls.create(data, user, source_lead_id=lead_id, deal_id=deal_id, prepared=prepared)
 
     @classmethod
     def _calculation_source(cls, deal: dict) -> dict:
