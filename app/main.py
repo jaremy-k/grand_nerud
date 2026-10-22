@@ -28,6 +28,7 @@ from app.adresses.router import router as router_adresses
 from app.lead_stages.router import router as router_lead_stages
 from app.leads.router import router as router_leads
 from app.tasks.router import router as router_tasks
+from app.workspace.router import router as router_workspace
 
 
 @asynccontextmanager
@@ -100,6 +101,7 @@ app.include_router(router_adresses)
 app.include_router(router_lead_stages)
 app.include_router(router_leads)
 app.include_router(router_tasks)
+app.include_router(router_workspace)
 
 
 @app.middleware("http")
