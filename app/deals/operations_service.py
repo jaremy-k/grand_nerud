@@ -67,6 +67,7 @@ class DealOperationsService:
             if kind == "payments":
                 after.update(kind=data.kind, amountMinor=scaled(data.amount), dueDate=data.dueDate.isoformat() if data.dueDate else None,
                              actualDate=data.actualDate.isoformat() if data.actualDate else None, reference=data.reference)
+                after["companyId"] = before["companyId"] if before and before.get("kind") == data.kind and "companyId" in before else deal.get("customerId" if data.kind == "customer" else "providerId") if data.kind in ("customer", "provider") else None
             else:
                 # A planned shipment may change its date/quantity, but keeps its original counterparties and addresses.
                 after.update(quantityMilli=scaled(data.quantity, 1000), unit=normalize_unit(data.unit),
@@ -76,14 +77,16 @@ class DealOperationsService:
                 for field in ("providerId", "shippingAddressId", "deliveryAddressId", "materialId"):
                     after[field] = before.get(field) if before and field in before else deal.get(field)
                 for field, company_field, text_field in [("shippingAddressId", "providerId", "shippingAddressText"), ("deliveryAddressId", "customerId", "deliveryAddressText")]:
-                    identifier = getattr(data, field) or after.get(field)
+                    address_id = getattr(data, field) or after.get(field)
                     # Unchanged historical addresses remain readable even if subsequently archived.
-                    if before and str(identifier or "") == str(before.get(field) or ""):
+                    if before and str(address_id or "") == str(before.get(field) or ""):
                         after[field] = before.get(field)
                         after[text_field] = before.get(text_field, "")
                         continue
-                    after[field] = parse_object_id(str(identifier), field) if identifier else None
+                    after[field] = parse_object_id(str(address_id), field) if address_id else None
                     if after[field]:
+                        if not deal.get(company_field):
+                            raise ValidationError("Для адреса поставки сначала выберите компанию сделки")
                         address = await DealsService.repository.read_operation_address(after[field], deal.get(company_field))
                         if not address:
                             raise ValidationError("Адрес не найден или не принадлежит компании сделки")
@@ -102,5 +105,10 @@ class DealOperationsService:
         await DealsService._enrich_response({**deal, **changes}, user)
         saved = await DealsService.repository.update_checked(deal, changes)
         if not saved:
+            if not entry_id and not cancel:
+                latest = await cls._deal(identifier, user)
+                prior = next((row for row in ledger_for(latest)[kind] if row.get("requestId") == str(data.requestId)), None)
+                if prior and prior.get("fingerprint") == fingerprint:
+                    return await cls.response(latest, user)
             raise ConflictError("Данные сделки изменились. Обновите данные перед сохранением")
         return await cls.response(saved, user)

@@ -20,6 +20,8 @@ from app.deals.service import DealsService
 from app.exceptions import AppError, InternalError, ValidationError
 from app.users.dependencies import get_current_user
 from app.users.shemas import SUsersGet
+from app.core.mongo_utils import serialize_mongo_doc, convert_objectids_to_str
+from datetime import datetime, timezone
 
 
 @pytest.fixture
@@ -221,3 +223,17 @@ def test_database_failure_does_not_look_like_missing_record_or_zero_total():
     repository = DealsRepository(SimpleNamespace(find_one=AsyncMock(side_effect=ServerSelectionTimeoutError("private"))))
     with pytest.raises(InternalError):
         asyncio.run(repository.read_for_operations(ObjectId()))
+
+
+def test_revision_matches_raw_bson_serialized_detail_and_list():
+    raw = {"userId": ObjectId(), "customerId": ObjectId(), "stageId": ObjectId(), "calculationRuleId": ObjectId(),
+           "quantity": 100, "updatedAt": datetime(2026, 10, 23, 10, 0, 0, 123000, tzinfo=timezone.utc), "unitMeasurement": ""}
+    assert revision(raw) == revision(serialize_mongo_doc(raw)) == revision(convert_objectids_to_str(raw))
+
+
+def test_deal_price_edit_retains_before_and_after_in_operation_history(api):
+    api.client.post(f"{api.root}/payments", json=payment(api))
+    changes = guard_deal_edit(api.state["deal"], {"amountSalesUnit": 12}, api.user)
+    event = changes["_operations"]["history"][-1]
+    assert event["before"]["amountSalesUnit"] == 10
+    assert event["after"]["amountSalesUnit"] == 12

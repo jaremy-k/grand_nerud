@@ -120,7 +120,7 @@ def test_crm_routes_on_real_mongodb(monkeypatch):
                 assert updated.json()["contacts"] == [{"Director": "FNS"}]
 
                 payload = {"serviceId": str(service), "customerId": str(items[0]["_id"]), "providerId": str(items[1]["_id"]),
-                           "stageId": str(stage), "materialId": str(material), "quantity": 10,
+                           "stageId": str(stage), "materialId": str(material), "quantity": 10, "unitMeasurement": "тонна",
                            "amountPurchaseUnit": 1000, "amountSalesUnit": 1500, "paymentMethod": "наличный расчет"}
                 responses = await asyncio.gather(*(http.post("/deals", json=payload, headers=headers(employee if index % 2 else other)) for index in range(20)))
                 assert all(response.status_code == 201 for response in responses), [response.text for response in responses if response.status_code != 201]
@@ -136,6 +136,49 @@ def test_crm_routes_on_real_mongodb(monkeypatch):
                 assert [row["numberSequence"] for row in own["items"]] == sorted(row["numberSequence"] for row in own["items"])
                 exact = (await http.get("/deals", params={"search": one["number"]}, headers=headers(manager))).json()
                 assert exact["total"] == 1 and exact["items"][0]["_id"] == one["_id"]
+
+                root = f"/deals/{one['_id']}"
+                assert (await http.get(f"{root}/operations", headers=headers(other))).status_code == 403
+                current = (await http.get(f"{root}/operations", headers=headers(employee))).json()
+                original_revision = current["revision"]
+                planned = {"revision": original_revision, "requestId": str(uuid4()), "status": "planned", "quantity": "6", "unit": "т", "plannedDate": "2026-10-01"}
+                scheduled = await http.post(f"{root}/shipments", json=planned, headers=headers(employee))
+                assert scheduled.status_code == 201, scheduled.text
+                current = scheduled.json()
+                assert current["summary"]["plannedQuantity"] == 6 and current["summary"]["deliveredQuantity"] == 0
+                competitors = [{**planned, "revision": current["revision"], "requestId": str(uuid4()), "quantity": "3"} for _ in range(2)]
+                raced = await asyncio.gather(*(http.post(f"{root}/shipments", json=row, headers=headers(employee)) for row in competitors))
+                assert sorted(response.status_code for response in raced) == [201, 409]
+                current = (await http.get(f"{root}/operations", headers=headers(employee))).json()
+                too_much = await http.post(f"{root}/shipments", json={**planned, "revision": current["revision"], "requestId": str(uuid4()), "quantity": "2"}, headers=headers(employee))
+                assert too_much.status_code == 422
+                first_shipment = current["shipments"][0]
+                delivered = await http.patch(f"{root}/shipments/{first_shipment['_id']}", json={**planned, "revision": current["revision"], "status": "delivered", "quantity": "4", "actualDate": "2026-10-01", "amountPurchase": "3900"}, headers=headers(employee))
+                assert delivered.status_code == 200, delivered.text
+                current = delivered.json()
+                assert current["summary"]["remainingQuantity"] == 6 and current["summary"]["unplannedQuantity"] == 3
+                refreshed = (await http.get(root, headers=headers(employee))).json()
+                assert refreshed["totalDeliveredQuantity"] == 4 and refreshed["actualAmountPurchaseTotal"] == 3900
+                assert "_operations" not in refreshed
+                assert refreshed["operationsSummary"]["executionStatus"] == "partial"
+                assert refreshed["operationsRevision"] == current["revision"]
+                edit_from_detail = await http.patch(root, json={"notes": "Changed after shipment", "operationsRevision": refreshed["operationsRevision"]}, headers=headers(employee))
+                assert edit_from_detail.status_code == 200, edit_from_detail.text
+                current = (await http.get(f"{root}/operations", headers=headers(employee))).json()
+                assert (await http.patch(root, json={"notes": "Outdated", "operationsRevision": original_revision}, headers=headers(employee))).status_code == 409
+                assert (await http.patch(root, json={"quantity": 5, "operationsRevision": current["revision"]}, headers=headers(employee))).status_code == 422
+                assert (await http.patch(root, json={"deliveredQuantity": [], "operationsRevision": current["revision"]}, headers=headers(employee))).status_code == 409
+                posted = {"revision": current["revision"], "requestId": str(uuid4()), "status": "paid", "kind": "customer", "amount": "5000.10", "actualDate": "2026-10-01"}
+                repeated = await asyncio.gather(*(http.post(f"{root}/payments", json=posted, headers=headers(employee)) for _ in range(3)))
+                assert all(response.status_code == 201 for response in repeated), [response.text for response in repeated]
+                current = (await http.get(f"{root}/operations", headers=headers(employee))).json()
+                assert len(current["payments"]) == 1 and current["summary"]["customerPaid"] == 5000.1
+                assert current["summary"]["customerDebt"] == 9999.9
+                payment_id = current["payments"][0]["_id"]
+                cancelled = await http.post(f"{root}/payments/{payment_id}/cancel", json={"revision": current["revision"], "reason": "Ошибочная запись"}, headers=headers(employee))
+                assert cancelled.status_code == 200 and cancelled.json()["summary"]["customerPaid"] == 0
+                assert cancelled.json()["history"]["items"][0]["before"]["amount"] == 5000.1
+                assert (await http.delete(root, headers=headers(employee))).status_code == 409
 
                 retry_id = ObjectId()
                 retries = await asyncio.gather(*(deals_repo.create({"_id": retry_id, "userId": employee}) for _ in range(10)))

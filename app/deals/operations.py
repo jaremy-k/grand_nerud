@@ -1,7 +1,7 @@
 """Embedded operational ledger; arithmetic in minor units, not binary floats."""
 import hashlib
 from copy import deepcopy
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
 
@@ -33,6 +33,21 @@ def scaled(value, scale=100):
 
 def revision(deal: dict) -> str:
     fields = {key: deal.get(key) for key in GUARDED_FIELDS}
+    # Detail/list pipelines serialize BSON differently; their revision must match the raw document.
+    for key, value in fields.items():
+        if isinstance(value, ObjectId):
+            fields[key] = str(value)
+    updated = fields.get("updatedAt")
+    if isinstance(updated, str):
+        try:
+            updated = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+    if isinstance(updated, datetime):
+        updated = updated.replace(tzinfo=timezone.utc) if updated.tzinfo is None else updated.astimezone(timezone.utc)
+        fields["updatedAt"] = updated.isoformat(timespec="milliseconds")
+    if not fields.get("unitMeasurement"):
+        fields["unitMeasurement"] = None
     fields["version"] = (deal.get("_operations") or {}).get("version", 0)
     return hashlib.sha256(BSON.encode(fields)).hexdigest()
 
@@ -102,6 +117,7 @@ def summary(ledger: dict, deal: dict) -> dict:
             "customerOverpayment": max(0, paid["customer"] - amount) / 100 if amount is not None else None,
             "providerAmount": purchase / 100 if purchase is not None else None, "providerPaid": paid["provider"] / 100,
             "providerDebt": max(0, purchase - paid["provider"]) / 100 if purchase is not None else None,
+            "providerOverpayment": max(0, paid["provider"] - purchase) / 100 if purchase is not None else None,
             "deliveryPaid": paid["delivery"] / 100, "otherPaid": paid["other"] / 100,
             "cashBalance": (paid["customer"] - paid["provider"] - paid["delivery"] - paid["other"]) / 100,
             "orderedQuantity": ordered / 1000 if ordered is not None else None, "unit": unit,
@@ -159,6 +175,6 @@ def guard_deal_edit(existing: dict, payload: dict, user) -> dict:
     if existing.get("_operations") is not None:
         changes = {key: value for key, value in payload.items() if value != existing.get(key)}
         if changes:
-            append_history(ledger, user, "deal", str(existing["_id"]), "updated", None, changes)
+            append_history(ledger, user, "deal", str(existing["_id"]), "updated", {key: existing.get(key) for key in changes}, changes)
             payload["_operations"] = ledger
     return payload

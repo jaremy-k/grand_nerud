@@ -105,7 +105,8 @@ class DealsRepository(MongoRepository):
         pipeline.append({"$match": {"$or": matches}})
         items = [{"$sort": dict(sort or [("createdAt", -1), ("_id", -1)])},
                  {"$skip": skip}, {"$limit": limit},
-                 {"$project": {"_searchCustomer": 0, "_searchProvider": 0, "_searchMaterial": 0}}]
+                 {"$project": {"_searchCustomer": 0, "_searchProvider": 0, "_searchMaterial": 0}},
+                 {"$project": {"_operations.history": 0}}]
         if include_relations:
             items.extend(get_deal_relation_lookups())
         pipeline.append({"$facet": {"items": items, "total": [{"$count": "value"}]}})
@@ -124,7 +125,7 @@ class DealsRepository(MongoRepository):
             sort: Optional[list[tuple]],
     ) -> PaginatedResponse:
         total = await self._collection.count_documents(query)
-        cursor = self._collection.find(query, projection)
+        cursor = self._collection.find(query, projection if projection is not None else {"_operations.history": 0})
         if sort:
             cursor = cursor.sort(sort)
         cursor = cursor.skip(skip).limit(limit)
@@ -143,6 +144,7 @@ class DealsRepository(MongoRepository):
         if sort:
             pipeline.append({"$sort": dict(sort)})
         pipeline.extend([{"$skip": skip}, {"$limit": limit}])
+        pipeline.append({"$project": {"_operations.history": 0}})
         pipeline.extend(get_deal_relation_lookups())
         items = convert_objectids_to_str(await self._collection.aggregate(pipeline).to_list(length=None))
         return self._build_paginated_response(items, total, skip, limit)

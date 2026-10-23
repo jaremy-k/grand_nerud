@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 
 from app.deals.operation_schemas import CancelOperation, PaymentWrite, ShipmentWrite
 from app.deals.operations_service import DealOperationsService
@@ -9,7 +9,8 @@ router = APIRouter(prefix="/{deal_id}", tags=["Оплаты и поставки"
 
 
 @router.get("/operations")
-async def operations(deal_id: str, historyPage: int = Query(1, ge=1), historyPageSize: int = Query(25, ge=1, le=100), user: SUsersGet = Depends(get_current_user)):
+async def operations(deal_id: str, response: Response, historyPage: int = Query(1, ge=1), historyPageSize: int = Query(25, ge=1, le=100), user: SUsersGet = Depends(get_current_user)):
+    response.headers["Cache-Control"] = "no-store"
     return await DealOperationsService.read(deal_id, user, historyPage, historyPageSize)
 
 
