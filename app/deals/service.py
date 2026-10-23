@@ -11,7 +11,8 @@ from app.core.pagination import PaginatedResponse, PaginationParams
 from app.deals.pipelines import build_deal_relations_pipeline
 from app.deals.repository import deals_repository
 from app.deals.shemas import SDeals, SDealsInput, SDealsPreviewInput, SDealsPreviewResult
-from app.exceptions import ForbiddenError, InternalError, NotFoundError, ValidationError
+from app.exceptions import ConflictError, ForbiddenError, InternalError, NotFoundError, ValidationError
+from app.deals.operations import guard_deal_edit, ledger_for, revision, summary
 from app.formula_engine.profit import get_manager_share
 from app.logger import logger
 from app.repositories.protocols import DealsRepositoryProtocol
@@ -94,7 +95,9 @@ class DealsService:
             rule_id=cls._rule_id_from_deal(deal),
         )
         computed["managerShare"] = get_manager_share(profit, deal.get("paymentMethod"), config)
-        return {**deal, **computed}
+        enriched = {key: value for key, value in {**deal, **computed}.items() if key != "_operations"}
+        return {**enriched, "operationsRevision": revision(deal), "operationsEnabled": deal.get("_operations") is not None,
+                "operationsSummary": summary(ledger_for(deal), enriched)}
 
     @classmethod
     async def list_deals(
@@ -218,6 +221,7 @@ class DealsService:
     async def prepare_creation(cls, data: SDealsInput, user: SUsersGet) -> dict:
         cls._validate_create(data)
         payload = cls._normalize_lists(data.model_dump(exclude_none=True))
+        payload.pop("operationsRevision", None)
         snapshots, rule_id, rule_version = await cls._compute_snapshots(payload, user)
         payload = {
             **payload,
@@ -274,7 +278,11 @@ class DealsService:
             raise NotFoundError("Сделка не найдена")
         cls._ensure_access(existing, user)
 
+        if (data.operationsRevision is not None and data.operationsRevision != revision(existing)) or (existing.get("_operations") is not None and data.operationsRevision is None):
+            raise ConflictError("Данные сделки изменились. Обновите страницу перед сохранением")
         payload = cls._normalize_lists(data.model_dump(exclude_none=True))
+        payload.pop("operationsRevision", None)
+        payload = guard_deal_edit(existing, payload, user)
         calc_source = cls._normalize_lists({**cls._calculation_source(existing), **payload})
         snapshots, _, _ = await cls._compute_snapshots(
             calc_source,
@@ -286,9 +294,9 @@ class DealsService:
             **snapshots,
             "updatedAt": datetime.now(),
         }
-        result = await cls.repository.update_by_id(object_id=deal_id, update_data=payload)
+        result = await cls.repository.update_checked(existing, payload)
         if not result:
-            raise InternalError("Не удалось обновить сделку")
+            raise ConflictError("Данные сделки изменились. Обновите страницу перед сохранением")
         logger.info("Deal updated: id=%s, changes=%s", deal_id, list(payload.keys()))
         return await cls._enrich_response(result, user)
 
@@ -319,6 +327,9 @@ class DealsService:
         if not existing:
             raise NotFoundError("Сделка не найдена")
         cls._ensure_access(existing, user)
+
+        if existing.get("_operations") and (existing["_operations"].get("payments") or existing["_operations"].get("shipments")):
+            raise ConflictError("Нельзя удалить сделку с историей оплат или поставок")
 
         result = await cls.repository.soft_delete(deal_id)
         if not result:

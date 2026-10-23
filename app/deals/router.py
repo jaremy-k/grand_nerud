@@ -16,12 +16,15 @@ from app.deals.shemas import (
 from app.logger import logger
 from app.users.dependencies import get_current_privileged_user, get_current_user
 from app.users.shemas import SUsersGet
+from app.deals.operations_router import router as operations_router
 
 router = APIRouter(
     prefix="/deals",
     tags=["Сделки"],
     dependencies=[Depends(get_current_user)],
 )
+
+router.include_router(operations_router, prefix="")
 
 
 @router.get("", response_model=PaginatedResponse, summary="Получить список сделок")

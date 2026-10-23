@@ -37,6 +37,7 @@ class _ObjectIdConverterMixin:
 
 
 class SDealsInput(_ObjectIdConverterMixin, BaseModel):
+    operationsRevision: str | None = Field(None, pattern=r"^[a-f0-9]{64}$")
     serviceId: Optional[PyObjectId] = None
     customerId: Optional[PyObjectId] = None
     providerId: Optional[PyObjectId] = None
@@ -114,6 +115,9 @@ class SDealsStageUpdate(_ObjectIdConverterMixin, BaseModel):
 
 
 class SDeals(BaseModel):
+    operationsRevision: str | None = None
+    operationsEnabled: bool | None = None
+    operationsSummary: dict | None = None
     number: str | None = None
     numberSequence: int | None = None
     id: str | None = Field(None, alias="_id")

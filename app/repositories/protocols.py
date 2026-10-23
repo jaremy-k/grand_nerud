@@ -77,6 +77,12 @@ class EntityRepositoryProtocol(Protocol):
 
 @runtime_checkable
 class DealsRepositoryProtocol(EntityRepositoryProtocol, Protocol):
+    async def read_operation_address(self, identifier: ObjectId, company_id: ObjectId) -> Optional[dict]: ...
+
+    async def read_for_operations(self, identifier: ObjectId) -> Optional[dict]: ...
+
+    async def update_checked(self, existing: dict, changes: dict) -> Optional[dict]: ...
+
     async def find_paginated_with_relations(
             self,
             filter_by: Optional[dict] = None,

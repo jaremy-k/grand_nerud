@@ -2,6 +2,7 @@ from typing import Optional
 import re
 
 from bson import ObjectId
+from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from app.core.mongo_utils import convert_objectids_to_str
@@ -15,6 +16,27 @@ from app.repositories.mongo import MongoRepository
 
 
 class DealsRepository(MongoRepository):
+    async def read_operation_address(self, identifier, company_id):
+        try:
+            return await self._collection.database["adresses"].find_one({"_id": identifier, "companyId": {"$in": [company_id, str(company_id)]}, "deletedAt": None})
+        except PyMongoError as exc:
+            raise InternalError("Не удалось проверить адрес поставки") from exc
+
+    async def read_for_operations(self, identifier):
+        try:
+            return await self._collection.find_one({"_id": identifier, "deletedAt": None})
+        except PyMongoError as exc:
+            raise InternalError("Не удалось загрузить операции сделки") from exc
+
+    async def update_checked(self, existing: dict, changes: dict):
+        from app.deals.operations import GUARDED_FIELDS
+        query = {"_id": existing["_id"], "deletedAt": None, **{key: existing.get(key) for key in GUARDED_FIELDS}}
+        query["_operations.version"] = existing["_operations"]["version"] if existing.get("_operations") is not None else {"$exists": False}
+        try:
+            return await self._collection.find_one_and_update(query, {"$set": changes}, return_document=ReturnDocument.AFTER)
+        except PyMongoError as exc:
+            raise InternalError("Не удалось сохранить изменения сделки") from exc
+
     def __init__(self, collection, counters=None):
         super().__init__(collection)
         self.counters = counters if counters is not None else database_mongo["counters"]
