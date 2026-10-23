@@ -5,6 +5,8 @@ from bson import ObjectId
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from pydantic_settings import SettingsConfigDict
 
+from app.adresses.shemas import MoscowAdministrativeDistrict
+
 CompanyRole = Literal["provider", "customer"]
 
 
@@ -76,6 +78,22 @@ class SCompaniesAdd(BaseModel):
         from_attributes=True,
         populate_by_name=True
     )
+
+
+class SCompanyPageQuery(BaseModel):
+    page: int = Field(1, ge=1)
+    pageSize: int = Field(15, ge=1, le=100)
+    search: str | None = Field(None, max_length=200)
+    role: CompanyRole | None = None
+    includeDetails: bool = False
+    city: str | None = Field(None, max_length=150)
+    administrativeDistrict: MoscowAdministrativeDistrict | None = None
+    district: str | None = Field(None, max_length=150)
+    materialId: str | None = None
+    priceUnit: str | None = Field(None, max_length=30)
+    maxPrice: float | None = Field(None, ge=0, allow_inf_nan=False)
+    priceSort: Literal["default", "asc", "desc"] = "default"
+    sortBy: Literal["recent", "name"] = "recent"
 
 
 class SCompanyImportError(BaseModel):

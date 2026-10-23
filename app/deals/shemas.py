@@ -114,6 +114,8 @@ class SDealsStageUpdate(_ObjectIdConverterMixin, BaseModel):
 
 
 class SDeals(BaseModel):
+    number: str | None = None
+    numberSequence: int | None = None
     id: str | None = Field(None, alias="_id")
     sourceLeadId: Optional[PyObjectId] = None
     createdAt: datetime | None = None

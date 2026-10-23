@@ -2,18 +2,42 @@ from typing import Optional
 import re
 
 from bson import ObjectId
-from pymongo.errors import PyMongoError
+from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from app.core.mongo_utils import convert_objectids_to_str
 from app.core.pagination import PaginatedResponse
 from app.database import database_mongo
 from app.deals.pipelines import get_deal_relation_lookups
+from app.deals.numbering import next_deal_number
 from app.exceptions import InternalError
 from app.logger import logger
 from app.repositories.mongo import MongoRepository
 
 
 class DealsRepository(MongoRepository):
+    def __init__(self, collection, counters=None):
+        super().__init__(collection)
+        self.counters = counters if counters is not None else database_mongo["counters"]
+
+    async def create(self, document: dict) -> dict:
+        payload = {**document, "_id": document.get("_id") or ObjectId()}
+        try:
+            existing = await self._collection.find_one({"_id": payload["_id"]})
+            if existing:
+                return existing
+            payload.update(await next_deal_number(self.counters))
+            try:
+                await self._collection.insert_one(payload)
+            except DuplicateKeyError:
+                existing = await self._collection.find_one({"_id": payload["_id"]})
+                if existing:
+                    return existing
+                raise
+            return payload
+        except PyMongoError as exc:
+            logger.error("Could not create numbered deal", exc_info=True)
+            raise InternalError("Не удалось создать сделку") from exc
+
     async def find_paginated_with_relations(
             self,
             filter_by: Optional[dict] = None,
@@ -43,7 +67,7 @@ class DealsRepository(MongoRepository):
         fields = ["_searchCustomer.name", "_searchCustomer.abbreviatedName", "_searchCustomer.inn",
                   "_searchProvider.name", "_searchProvider.abbreviatedName", "_searchProvider.inn",
                   "_searchMaterial.name"]
-        matches = [{field: pattern} for field in fields]
+        matches = [{field: pattern} for field in ["number", *fields]]
         if ObjectId.is_valid(search):
             matches.append({"_id": ObjectId(search)})
         pipeline = [{"$match": query}]

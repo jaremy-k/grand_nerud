@@ -113,6 +113,8 @@ class DealsService:
             raise ValidationError("Страница должна быть положительной, размер страницы от 1 до 200")
         if search is not None and len(search) > 200:
             raise ValidationError("Поисковая строка не должна превышать 200 символов")
+        if sort_by and sort_by not in {"createdAt", "updatedAt", "_id", "numberSequence", "quantity", "amountSalesUnit", "amountPurchaseUnit"}:
+            raise ValidationError("Недопустимое поле сортировки сделок")
         if not user.is_privileged:
             if not user.id:
                 raise ForbiddenError()

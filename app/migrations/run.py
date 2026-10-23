@@ -373,6 +373,20 @@ async def run_migrations() -> None:
     await migrate_company_roles()
     await migrate_address_geography_indexes()
     await migrate_leads_and_tasks()
+    await migrate_deal_numbers_and_company_pages()
+
+
+async def migrate_deal_numbers_and_company_pages() -> None:
+    migration_id = "deal_numbers_company_pages_v1"
+    if await _is_applied(migration_id):
+        return
+    from app.deals.numbering import initialize_deal_numbers
+
+    await initialize_deal_numbers(DEALS_COLLECTION, database_mongo["counters"])
+    await COMPANIES_COLLECTION.create_index([("deletedAt", 1), ("roles", 1), ("_id", -1)])
+    await COMPANIES_COLLECTION.create_index([("deletedAt", 1), ("name", 1), ("_id", 1)])
+    await DEALS_COLLECTION.create_index([("deletedAt", 1), ("userId", 1), ("numberSequence", -1)])
+    await _mark_applied(migration_id)
 
 
 async def migrate_leads_and_tasks() -> None:

@@ -10,7 +10,9 @@ from app.companies.shemas import (
     SCompaniesAdd,
     SCompanyImportResult,
     SCompaniesWithDetails,
+    SCompanyPageQuery,
 )
+from app.core.pagination import PaginatedResponse
 from app.exceptions import ValidationError
 from app.logger import logger
 from app.users.dependencies import get_current_user
@@ -50,6 +52,11 @@ async def import_companies(
     if len(content) > MAX_EXCEL_FILE_SIZE:
         raise ValidationError("Размер Excel-файла не должен превышать 10 МБ")
     return await CompaniesService.import_excel(content, role=role, create_leads=createLeads, user=user)
+
+
+@router.get("/page", response_model=PaginatedResponse, summary="Поиск и страницы компаний")
+async def get_company_page(data: SCompanyPageQuery = Depends()):
+    return await CompaniesService.list_page(data)
 
 
 @router.get("/{id}", response_model=SCompanies, summary="Получить компанию по ID")

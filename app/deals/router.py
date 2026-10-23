@@ -31,7 +31,7 @@ async def get_deals(
         sortOrder: Optional[str] = Query("asc", pattern="^(asc|desc)$"),
         includeRelations: bool = Query(False),
         includeDeleted: bool = Query(False),
-        search: str | None = Query(None, max_length=200, description="Поиск по компании, ИНН, материалу или ID"),
+        search: str | None = Query(None, max_length=200, description="Поиск по номеру сделки, компании, ИНН, материалу или ID"),
         companyId: str | None = Query(None, description="Компания в роли заказчика или исполнителя"),
         data: SDeals = Depends(),
         user: SUsersGet = Depends(get_current_user),

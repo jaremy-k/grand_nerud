@@ -6,7 +6,9 @@ from pydantic import ValidationError as PydanticValidationError
 from app.companies.excel_import import CompanyExcelFormatError, parse_companies_excel
 from app.companies.repository import companies_repository
 from app.companies.pipelines import build_company_details_pipeline
-from app.companies.shemas import CompanyRole, SCompanies, SCompaniesAdd
+from app.companies.shemas import CompanyRole, SCompanies, SCompaniesAdd, SCompaniesWithDetails, SCompanyPageQuery
+from app.companies.page_pipeline import build_company_page_pipeline
+from app.core.pagination import PaginatedResponse
 from app.company_materials.repository import company_materials_repository
 from app.core.base_entity_service import BaseEntityService
 from app.core.mongo_utils import serialize_mongo_docs
@@ -23,6 +25,16 @@ class CompaniesService(BaseEntityService):
     repository = companies_repository
     not_found_detail = "Компания не найдена"
     conflict_detail = "Невозможно удалить компанию — имеются связанные объекты"
+
+    @classmethod
+    async def list_page(cls, data: SCompanyPageQuery) -> PaginatedResponse:
+        result = await cls.repository.read_page(build_company_page_pipeline(data))
+        items = [SCompaniesWithDetails.model_validate(item).model_dump(by_alias=True, exclude_none=True, mode="json")
+                 for item in serialize_mongo_docs(result["items"])]
+        total = result["total"][0]["value"] if result["total"] else 0
+        total_pages = (total + data.pageSize - 1) // data.pageSize
+        return PaginatedResponse(items=items, total=total, page=data.page, page_size=data.pageSize,
+                                 total_pages=total_pages, has_next=data.page < total_pages, has_prev=data.page > 1)
 
     @classmethod
     async def list_companies(
