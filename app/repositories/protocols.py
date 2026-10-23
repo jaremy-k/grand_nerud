@@ -85,5 +85,6 @@ class DealsRepositoryProtocol(EntityRepositoryProtocol, Protocol):
             limit: int = 100,
             sort: Optional[list[tuple]] = None,
             include_relations: bool = False,
+            search: str = "",
             **kwargs,
     ) -> PaginatedResponse: ...

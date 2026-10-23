@@ -106,18 +106,33 @@ class DealsService:
             sort_order: str = "asc",
             include_relations: bool = False,
             include_deleted: bool = False,
+            search: str | None = None,
+            company_id: str | None = None,
     ) -> PaginatedResponse:
+        if pagination.page < 1 or not 1 <= pagination.limit <= 200:
+            raise ValidationError("Страница должна быть положительной, размер страницы от 1 до 200")
+        if search is not None and len(search) > 200:
+            raise ValidationError("Поисковая строка не должна превышать 200 символов")
         if not user.is_privileged:
-            filters.userId = ObjectId(user.id)
+            if not user.id:
+                raise ForbiddenError()
+            filters.userId = parse_object_id(str(user.id), "userId")
 
         filter_data = filters.model_dump(exclude_none=True)
         if not include_deleted:
             filter_data["deletedAt"] = None
+        if company_id is not None:
+            company_object_id = parse_object_id(company_id, "companyId")
+            filter_data["$or"] = [
+                {"customerId": company_object_id}, {"providerId": company_object_id},
+            ]
 
-        sort = None
+        sort = [("createdAt", -1), ("_id", -1)]
         if sort_by:
             order = 1 if sort_order == "asc" else -1
             sort = [(sort_by, order)]
+            if sort_by != "_id":
+                sort.append(("_id", order))
 
         result = await cls.repository.find_paginated_with_relations(
             filter_by=filter_data,
@@ -125,6 +140,7 @@ class DealsService:
             limit=pagination.limit,
             sort=sort,
             include_relations=include_relations,
+            search=(search or "").strip(),
         )
         enriched_items = []
         for item in result.items:
